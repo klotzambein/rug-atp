@@ -27,27 +27,15 @@ impl CanvasObject for CanvasGrid {
 }
 
 fn main() {
-    // init_logger();
-
     let mut app = AppInit::new();
-
-    // let state = init_state(&app);
-    // let mut cmd = CommandExecutor::new(state.clone());
 
     app.set_canvas_click_handler({
         // let state = state.clone();
         Box::new(move |pos| {
-            // if let CommandRequest::Point(req) = &mut *state.command_request() {
-            //     if req.is_none() {
-            //         *req = Some(pos);
-            //     }
-            // }
+            println!("User clicked: {:?}", pos);
         })
     });
 
-    // let root_canvas_obj = RootCanvasObject::new(state.clone());
-
-    // - - - UI init - - -
     // let mut ui = UI::new(app.imgui.clone());
 
     let grid = CanvasGrid {
@@ -60,23 +48,14 @@ fn main() {
             }).collect::<Vec<_>>(),
         )
         .unwrap(),
-        texture: load_png_texture(&app.display),
+        texture: load_png_texture(&app.display, include_bytes!("./../../../assets/tileset.png")),
     };
 
-    app.run(move |app, target, last_frame| {
-        // state.get_mut().model.room.as_mut().unwrap().step(0.001);
-        // state.get_mut().model.redraw_room(&app.display).unwrap();
-
+    app.run(move |app, target, _last_frame| {
         target.clear_color_srgb(242. / 255., 206. / 255., 223. / 255., 1.);
 
         app.canvas.draw(target, &grid, &()).unwrap();
 
         // ui.draw(last_frame, target, &state, &mut cmd);
-        // cmd.poll();
-
-        // if let Some(mut imported) = state.imported() {
-        //     imported.update(&app.display);
-        // }
-        // state.debug().update(&app.display);
     });
 }
