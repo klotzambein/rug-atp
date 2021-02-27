@@ -1,30 +1,9 @@
-use glium::texture::Texture2d;
-use glium::{Surface, VertexBuffer};
-use gui_framework::{
-    canvas::{CanvasError, CanvasObject, DrawingContext},
-    graphics::primitives::{Sprite, Vf2},
-    texture::load_png_texture,
-    AppInit,
-};
+use glium::Surface;
+use grid::CanvasGrid;
+use gui_framework::AppInit;
 
-pub struct CanvasGrid {
-    vertex_buffer: VertexBuffer<Sprite>,
-    texture: Texture2d,
-}
-
-impl CanvasObject for CanvasGrid {
-    fn draw<'a>(&self, ctx: &mut DrawingContext<'a>) -> Result<(), CanvasError> {
-        ctx.programs.draw_sprites(
-            ctx.target,
-            self.vertex_buffer.slice(..).unwrap(),
-            &self.texture,
-            ctx.model_transform,
-            ctx.view_transform,
-        )?;
-
-        Ok(())
-    }
-}
+pub mod grid;
+pub mod tile;
 
 fn main() {
     let mut app = AppInit::new();
@@ -38,18 +17,7 @@ fn main() {
 
     // let mut ui = UI::new(app.imgui.clone());
 
-    let grid = CanvasGrid {
-        vertex_buffer: VertexBuffer::new(
-            &app.display,
-            &(0..64).map(|i| Sprite {
-                vertex: Vf2::new((i % 8) as f32 * 10.0, (i / 8) as f32 * 10.0),
-                size: Vf2::new(10., 10.),
-                texture_index: i,
-            }).collect::<Vec<_>>(),
-        )
-        .unwrap(),
-        texture: load_png_texture(&app.display, include_bytes!("./../../../assets/tileset.png")),
-    };
+    let grid: grid::CanvasGrid = CanvasGrid::new(&app.display, 100, 100);
 
     app.run(move |app, target, _last_frame| {
         target.clear_color_srgb(242. / 255., 206. / 255., 223. / 255., 1.);
