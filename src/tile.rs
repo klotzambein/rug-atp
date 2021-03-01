@@ -1,5 +1,12 @@
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Tile {
     pub texture: TileTexture,
+}
+
+impl Tile {
+    pub fn new(texture: TileTexture) -> Tile {
+        Tile { texture }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -13,6 +20,7 @@ pub enum TileTexture {
     SnowTree = 05,
     SnowRock = 06,
     Water = 07,
+
     Sand = 08,
     SandPalm = 09,
     SandRock = 10,
@@ -21,6 +29,7 @@ pub enum TileTexture {
     TundraTreeDead = 13,
     TundraTree = 14,
     WaterRock = 15,
+
     Dirt = 16,
     DirtTreeDead = 17,
     DirtRock = 18,
@@ -29,6 +38,7 @@ pub enum TileTexture {
     Mud = 21,
     MudDried = 22,
     Lava = 23,
+
     Sludge = 24,
     SludgeDried = 25,
     Rock = 26,

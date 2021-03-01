@@ -18,8 +18,8 @@ use crate::tile::TileTexture;
 
 pub struct CanvasGrid {
     chunks: Vec<GridChunk>,
-    width: usize,
-    height: usize,
+    pub(crate) width: usize,
+    pub(crate) height: usize,
     texture: Texture2d,
 }
 
@@ -36,14 +36,10 @@ impl CanvasObject for CanvasGrid {
             transform.transform_point(Point2D::new(1., 1.)),
         );
 
-        dbg!(bb.min, bb.max);
-
         let min_x = min(max((bb.min.x / 320.0) as i32, 0) as usize, self.width);
         let min_y = min(max((bb.min.y / 320.0) as i32, 0) as usize, self.height);
         let max_x = min(max((bb.max.x / 320.0) as i32, 0) as usize + 1, self.width);
         let max_y = min(max((bb.max.y / 320.0) as i32, 0) as usize + 1, self.height);
-
-        dbg!(min_x, min_y, max_x, max_y);
 
         for y in min_y..max_y {
             let i_row = y * self.width;
@@ -79,7 +75,11 @@ impl CanvasGrid {
             texture: load_png_texture(display, include_bytes!("./../../../assets/tileset.png")),
         }
     }
-    pub fn update_chunk(&self, chunk: (usize, usize), tiles: impl Iterator<Item = TileTexture> + Clone) {
+    pub fn update_chunk(
+        &self,
+        chunk: (usize, usize),
+        tiles: impl Iterator<Item = TileTexture> + Clone,
+    ) {
         assert!(chunk.0 < self.width, chunk.1 < self.height);
         let chunk = &self.chunks[chunk.1 * self.width + chunk.0];
         let hash = {
