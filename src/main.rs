@@ -1,6 +1,6 @@
 use glium::Surface;
 use grid::CanvasGrid;
-use gui_framework::AppInit;
+use dear_gui::AppInit;
 use world::World;
 
 pub mod grid;

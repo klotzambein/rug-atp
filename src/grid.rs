@@ -6,7 +6,7 @@ use std::{
 
 use glium::VertexBuffer;
 use glium::{texture::Texture2d, Display};
-use gui_framework::{
+use dear_gui::{
     canvas::{CanvasError, CanvasObject, DrawingContext},
     graphics::primitives::{Sprite, Vf2},
     texture::load_png_texture,
@@ -72,7 +72,7 @@ impl CanvasGrid {
                 .collect(),
             width: width,
             height: height,
-            texture: load_png_texture(display, include_bytes!("./../../../assets/tileset.png")),
+            texture: load_png_texture(display, include_bytes!("../assets/tileset.png")),
         }
     }
     pub fn update_chunk(
