@@ -1,4 +1,9 @@
+// TODO: For every company/resource ID they meet, they add them to their table of
+//       met entities and calculate the reward expectation using an RL algorithm.
+
 use std::num::NonZeroU16;
+
+use rand::Rng;
 
 use crate::world::World;
 
@@ -16,6 +21,7 @@ impl AgentId {
 pub struct Agent {
     pub pos_x: u16,
     pub pos_y: u16,
+    pub job_id: u8,
     pub health: u8,
     pub cash: u32,
 }
@@ -23,8 +29,11 @@ pub struct Agent {
 impl Agent {
     pub fn preferred_action(&self, world: &World) -> AgentAction {
         let tt = world.tile_type(self.pos_x, self.pos_y);
-        if self.pos_x != 10 || self.pos_y != 10 {
-            AgentAction::Move(10, 10)
+        
+        let target_x = rand::thread_rng().gen_range(0..world.width);
+        let target_y = rand::thread_rng().gen_range(0..world.height);
+        if self.pos_x == 0 || self.pos_y == 0 {
+            AgentAction::Move(target_x, target_y)
         // else if {
         } else {
             AgentAction::None
@@ -39,4 +48,15 @@ pub enum AgentAction {
     // Invest(CompanyId),
     Farm(u16, u16),
     Scan(),
+}
+
+pub enum JobType {
+    None,
+    CompanyMember,
+    Miner,
+    Farmer,
+    Explorer,
+    Fisher,
+    // Builder,
+    // Butcher,
 }

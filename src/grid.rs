@@ -4,11 +4,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use dear_gui::{
-    canvas::{CanvasError, CanvasObject, DrawingContext},
-    graphics::primitives::{Sprite, Vf2},
-    texture::load_png_texture,
-};
+use dear_gui::{canvas::{CanvasError, CanvasObject, DrawingContext}, graphics::{dyn_vertex_buffer::DynVertexBuffer, primitives::{Sprite, Vf2}}, texture::load_png_texture};
 use glium::VertexBuffer;
 use glium::{texture::Texture2d, Display};
 
@@ -18,7 +14,7 @@ use crate::tile::TileTexture;
 
 pub struct CanvasGrid {
     chunks: Vec<GridChunk>,
-    agents: VertexBuffer<Sprite>,
+    agents: DynVertexBuffer<Sprite>,
     pub(crate) width: usize,
     pub(crate) height: usize,
     grid_texture: Texture2d,
@@ -64,7 +60,7 @@ impl CanvasObject for CanvasGrid {
 
         ctx.programs.draw_sprites(
             ctx.target,
-            self.agents.slice(..).unwrap(),
+            self.agents.get(),
             &self.agent_texture,
             ctx.model_transform,
             ctx.view_transform,
@@ -80,7 +76,7 @@ impl CanvasGrid {
             chunks: std::iter::repeat_with(|| GridChunk::new(display))
                 .take(width * height)
                 .collect(),
-            agents: VertexBuffer::new(display, &[]).unwrap(),
+            agents: DynVertexBuffer::new(display).unwrap(),
             width,
             height,
             grid_texture: load_png_texture(display, include_bytes!("../assets/tileset.png")),
@@ -116,9 +112,10 @@ impl CanvasGrid {
         }
     }
 
-    pub fn update_sprites(&self, sprites: impl IntoIterator<Item = Sprite>) {
+    pub fn update_agents(&mut self, display: &Display, sprites: impl IntoIterator<Item = Sprite>) {
         let sprites = sprites.into_iter().collect::<Vec<_>>();
-        self.agents.write(&sprites);
+        self.agents.clear();
+        self.agents.extend(display, sprites.into_iter()).unwrap();
     }
 }
 

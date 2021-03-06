@@ -1,5 +1,8 @@
 use std::num::NonZeroU16;
 
+use dear_gui::graphics::primitives::{Sprite, Vf2};
+use glium::Display;
+
 use crate::{
     agent::{Agent, AgentAction, AgentId},
     grid::CanvasGrid,
@@ -13,7 +16,7 @@ pub struct World {
     // tiles_action: Vec<TileAction>,
     agents: Vec<Agent>,
     // conflicts: Vec<Vec<TileAction>>,
-    width: usize,
+    width: usize, // Q from Andrei: Should this remain usize or u16?
     height: usize,
 }
 
@@ -121,7 +124,7 @@ impl World {
         // self.tiles_action.iter_mut().for_each(|a|)
     }
 
-    pub fn update_grid(&self, grid: &CanvasGrid) {
+    pub fn update_grid(&self, display: &Display, grid: &mut CanvasGrid) {
         assert_eq!(grid.width * 32, self.width);
         assert_eq!(grid.height * 32, self.height);
         for cx in 0..grid.width {
@@ -138,6 +141,14 @@ impl World {
             }
         }
 
-        grid.update_sprites(self.agents.iter().map(|_| unimplemented!()))
+        grid.update_agents(display, self.agents.iter().map(|a| Sprite {
+            vertex: Vf2::new(a.pos_x as f32 * 10., a.pos_y as f32 * 10.),
+            size: Vf2::new(10., 10.),
+            texture_index: 1,
+        }))
+    }
+
+    pub fn tile_type(&self, x: u16, y: u16) -> TileTexture {
+        self.tiles_type[self.idx(x as usize, y as usize)]
     }
 }
