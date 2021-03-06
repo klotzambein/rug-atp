@@ -4,13 +4,13 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use glium::VertexBuffer;
-use glium::{texture::Texture2d, Display};
 use dear_gui::{
     canvas::{CanvasError, CanvasObject, DrawingContext},
     graphics::primitives::{Sprite, Vf2},
     texture::load_png_texture,
 };
+use glium::VertexBuffer;
+use glium::{texture::Texture2d, Display};
 
 use euclid::{Box2D, Point2D, Vector2D};
 
@@ -18,9 +18,11 @@ use crate::tile::TileTexture;
 
 pub struct CanvasGrid {
     chunks: Vec<GridChunk>,
+    agents: VertexBuffer<Sprite>,
     pub(crate) width: usize,
     pub(crate) height: usize,
-    texture: Texture2d,
+    grid_texture: Texture2d,
+    agent_texture: Texture2d,
 }
 
 impl CanvasObject for CanvasGrid {
@@ -53,12 +55,20 @@ impl CanvasObject for CanvasGrid {
                 ctx.programs.draw_sprites(
                     ctx.target,
                     c.vertex_buffer.slice(..).unwrap(),
-                    &self.texture,
+                    &self.grid_texture,
                     model_transform,
                     ctx.view_transform,
                 )?;
             }
         }
+
+        ctx.programs.draw_sprites(
+            ctx.target,
+            self.agents.slice(..).unwrap(),
+            &self.agent_texture,
+            ctx.model_transform,
+            ctx.view_transform,
+        )?;
 
         Ok(())
     }
@@ -70,11 +80,14 @@ impl CanvasGrid {
             chunks: std::iter::repeat_with(|| GridChunk::new(display))
                 .take(width * height)
                 .collect(),
-            width: width,
-            height: height,
-            texture: load_png_texture(display, include_bytes!("../assets/tileset.png")),
+            agents: VertexBuffer::new(display, &[]).unwrap(),
+            width,
+            height,
+            grid_texture: load_png_texture(display, include_bytes!("../assets/tileset.png")),
+            agent_texture: load_png_texture(display, include_bytes!("../assets/characters.png")),
         }
     }
+
     pub fn update_chunk(
         &self,
         chunk: (usize, usize),
@@ -101,6 +114,11 @@ impl CanvasGrid {
                 .collect::<Vec<_>>();
             chunk.vertex_buffer.write(&data)
         }
+    }
+
+    pub fn update_sprites(&self, sprites: impl IntoIterator<Item = Sprite>) {
+        let sprites = sprites.into_iter().collect::<Vec<_>>();
+        self.agents.write(&sprites);
     }
 }
 

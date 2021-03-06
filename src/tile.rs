@@ -1,11 +1,35 @@
+use crate::agent::AgentId;
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Tile {
     pub texture: TileTexture,
+    pub agent: Option<AgentId>,
+    // pub next_agent
 }
 
 impl Tile {
     pub fn new(texture: TileTexture) -> Tile {
-        Tile { texture }
+        Tile {
+            texture,
+            agent: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileAction {
+    None,
+    AgentClear,
+    AgentSet(AgentId),
+    /// Multiple actions on the same tile. Since we can not guarentee ordering we
+    /// need to handle all conflicts seperatly, this contains an index into the
+    /// conflict vector.
+    Conflict(u16),
+}
+
+impl Default for TileAction {
+    fn default() -> Self {
+        TileAction::None
     }
 }
 
