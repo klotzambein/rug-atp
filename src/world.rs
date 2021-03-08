@@ -4,17 +4,18 @@ use dear_gui::graphics::primitives::{Sprite, Vf2};
 use glium::Display;
 
 use crate::{
-    agent::{Agent, AgentAction, AgentId},
+    agent::{Agent, AgentAction},
+    entity::{Entity, EntityId, EntityType},
     grid::CanvasGrid,
     tile::{TileAction, TileTexture},
 };
 
 pub struct World {
     tiles_type: Vec<TileTexture>,
-    tiles_agent: Vec<Option<AgentId>>,
+    tiles_agent: Vec<Option<EntityId>>,
     // tiles_resource: Vec<u8>,
     // tiles_action: Vec<TileAction>,
-    agents: Vec<Agent>,
+    entities: Vec<Entity>,
     // conflicts: Vec<Vec<TileAction>>,
     pub width: usize, // Q from Andrei: Should this remain usize or u16?
     pub height: usize,
@@ -32,20 +33,24 @@ impl World {
         .take(width * height)
         .collect::<Vec<_>>();
 
-        let agents = (0..agent_count).map(|i| Agent {
-            pos_x: 0,
-            pos_y: 0,
-            job_id: (i % 32) as u8,
-            health: 255,
-            cash: 0,
-        }).collect();
+        let entities = (0..agent_count)
+            .map(|i| Entity {
+                pos_x: 0,
+                pos_y: 0,
+                ty: EntityType::Agent(Agent {
+                    job_id: (i % 32) as u8,
+                    health: 255,
+                    cash: 0,
+                }),
+            })
+            .collect();
 
         World {
             tiles_type,
             tiles_agent: vec![None; width * height],
             // tiles_resource: vec![0; width * height],
             // tiles_action: vec![TileAction::default(); width * height],
-            agents,
+            entities,
             // conflicts: Vec::new(),
             width,
             height,
@@ -113,22 +118,28 @@ impl World {
     // }
 
     pub fn step(&mut self) {
-        let mut agents = std::mem::take(&mut self.agents);
-        for (i, agent) in agents.iter_mut().enumerate() {
-            match agent.preferred_action(&self) {
+        let mut entities = std::mem::take(&mut self.entities);
+        for (i, entity) in entities.iter_mut().enumerate() {
+            let current_idx = self.idx(entity.pos_x.into(), entity.pos_y.into());
+            match entity
+                .agent()
+                .unwrap()
+                .preferred_action((entity.pos_x, entity.pos_y), &self)
+            {
                 AgentAction::Move(x, y) => {
                     let idx = self.idx(x.into(), y.into());
                     if self.tiles_agent[idx].is_none() {
-                        self.tiles_agent[idx] = Some(AgentId::new(i));
-                        agent.pos_x = x;
-                        agent.pos_y = y;
+                        self.tiles_agent[current_idx] = None;
+                        self.tiles_agent[idx] = Some(EntityId::new(i));
+                        entity.pos_x = x;
+                        entity.pos_y = y;
                     }
                 }
                 AgentAction::None => {}
                 _ => unimplemented!(),
             }
         }
-        self.agents = agents;
+        self.entities = entities;
         // self.tiles_action.iter_mut().for_each(|a|)
     }
 
@@ -151,10 +162,10 @@ impl World {
 
         grid.update_agents(
             display,
-            self.agents.iter().map(|a| Sprite {
+            self.entities.iter().map(|a| Sprite {
                 vertex: Vf2::new(a.pos_x as f32 * 10., a.pos_y as f32 * 10.),
                 size: Vf2::new(10., 10.),
-                texture_index: a.job_id as i32,
+                texture_index: a.agent().unwrap().job_id as i32,
             }),
         )
     }

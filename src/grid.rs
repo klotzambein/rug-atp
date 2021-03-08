@@ -4,7 +4,14 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use dear_gui::{canvas::{CanvasError, CanvasObject, DrawingContext}, graphics::{dyn_vertex_buffer::DynVertexBuffer, primitives::{Sprite, Vf2}}, texture::load_png_texture};
+use dear_gui::{
+    canvas::{CanvasError, CanvasObject, DrawingContext},
+    graphics::{
+        dyn_vertex_buffer::DynVertexBuffer,
+        primitives::{Sprite, Vf2},
+    },
+    texture::load_png_texture,
+};
 use glium::VertexBuffer;
 use glium::{texture::Texture2d, Display};
 
@@ -103,7 +110,7 @@ impl CanvasGrid {
             let data = tiles
                 .enumerate()
                 .map(|(i, t)| Sprite {
-                    vertex: Vf2::new((i % 32) as f32 * 10.0 + 0.5, (i / 32) as f32 * 10.0 + 0.5),
+                    vertex: Vf2::new((i % 32) as f32 * 10.0, (i / 32) as f32 * 10.0),
                     size: Vf2::new(10., 10.),
                     texture_index: t as i32,
                 })

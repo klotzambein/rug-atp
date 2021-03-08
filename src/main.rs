@@ -2,8 +2,8 @@ use dear_gui::AppInit;
 use glium::Surface;
 
 pub mod agent;
+pub mod entity;
 pub mod grid;
-// pub mod resources;
 pub mod tile;
 pub mod world;
 
@@ -23,7 +23,14 @@ fn main() {
     // let mut ui = UI::new(app.imgui.clone());
 
     let mut grid = CanvasGrid::new(&app.display, 10, 10);
-    let mut world = World::new(320, 320, 500);
+    let mut world = World::new(320, 320, 10_000);
+
+    for i in 0..200_000 {
+        if i % 10000 == 0 {
+            dbg!(i);
+        }
+        world.step();
+    }
 
     app.run(move |app, target, _last_frame| {
         target.clear_color_srgb(242. / 255., 206. / 255., 223. / 255., 1.);
