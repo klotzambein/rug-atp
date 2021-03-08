@@ -33,7 +33,7 @@ impl Agent {
         let target_x = rand::thread_rng().gen_range(0..world.width);
         let target_y = rand::thread_rng().gen_range(0..world.height);
         if self.pos_x == 0 || self.pos_y == 0 {
-            AgentAction::Move(target_x, target_y)
+            AgentAction::Move(target_x as u16, target_y as u16)
         // else if {
         } else {
             AgentAction::None

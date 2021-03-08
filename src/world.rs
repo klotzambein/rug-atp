@@ -16,8 +16,8 @@ pub struct World {
     // tiles_action: Vec<TileAction>,
     agents: Vec<Agent>,
     // conflicts: Vec<Vec<TileAction>>,
-    width: usize, // Q from Andrei: Should this remain usize or u16?
-    height: usize,
+    pub width: usize, // Q from Andrei: Should this remain usize or u16?
+    pub height: usize,
 }
 
 impl World {
@@ -32,12 +32,20 @@ impl World {
         .take(width * height)
         .collect::<Vec<_>>();
 
+        let agents = (0..agent_count).map(|i| Agent {
+            pos_x: 0,
+            pos_y: 0,
+            job_id: (i % 32) as u8,
+            health: 255,
+            cash: 0,
+        }).collect();
+
         World {
             tiles_type,
             tiles_agent: vec![None; width * height],
             // tiles_resource: vec![0; width * height],
             // tiles_action: vec![TileAction::default(); width * height],
-            agents: vec![Agent::default(); agent_count],
+            agents,
             // conflicts: Vec::new(),
             width,
             height,
@@ -141,11 +149,14 @@ impl World {
             }
         }
 
-        grid.update_agents(display, self.agents.iter().map(|a| Sprite {
-            vertex: Vf2::new(a.pos_x as f32 * 10., a.pos_y as f32 * 10.),
-            size: Vf2::new(10., 10.),
-            texture_index: 1,
-        }))
+        grid.update_agents(
+            display,
+            self.agents.iter().map(|a| Sprite {
+                vertex: Vf2::new(a.pos_x as f32 * 10., a.pos_y as f32 * 10.),
+                size: Vf2::new(10., 10.),
+                texture_index: a.job_id as i32,
+            }),
+        )
     }
 
     pub fn tile_type(&self, x: u16, y: u16) -> TileTexture {

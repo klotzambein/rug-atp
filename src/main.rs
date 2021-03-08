@@ -23,7 +23,7 @@ fn main() {
     // let mut ui = UI::new(app.imgui.clone());
 
     let mut grid = CanvasGrid::new(&app.display, 10, 10);
-    let mut world = World::new(320, 320, 20);
+    let mut world = World::new(320, 320, 500);
 
     app.run(move |app, target, _last_frame| {
         target.clear_color_srgb(242. / 255., 206. / 255., 223. / 255., 1.);
