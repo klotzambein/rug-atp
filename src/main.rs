@@ -6,6 +6,8 @@ pub mod entity;
 pub mod grid;
 pub mod tile;
 pub mod world;
+pub mod resources;
+pub mod building;
 
 use grid::CanvasGrid;
 use world::World;
@@ -24,8 +26,9 @@ fn main() {
 
     let mut grid = CanvasGrid::new(&app.display, 10, 10);
     let mut world = World::new(320, 320, 10_000);
+    let mut i = 0;
 
-    for i in 0..200_000 {
+    for i in 0..100_000 {
         if i % 10000 == 0 {
             dbg!(i);
         }
@@ -37,7 +40,10 @@ fn main() {
 
         app.canvas.draw(target, &grid, &()).unwrap();
 
-        world.step();
+        if i == 0 {
+            world.step();
+        }
+        i = (i + 1) % 10;
         world.update_grid(&app.display, &mut grid);
 
         // ui.draw(last_frame, target, &state, &mut cmd);

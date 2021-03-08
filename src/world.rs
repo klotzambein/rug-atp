@@ -1,14 +1,7 @@
-use std::num::NonZeroU16;
-
 use dear_gui::graphics::primitives::{Sprite, Vf2};
 use glium::Display;
 
-use crate::{
-    agent::{Agent, AgentAction},
-    entity::{Entity, EntityId, EntityType},
-    grid::CanvasGrid,
-    tile::{TileAction, TileTexture},
-};
+use crate::{agent::{Agent, AgentAction}, building::Building, entity::{Entity, EntityId, EntityType}, grid::CanvasGrid, resources::Resource, tile::{TileTexture}};
 
 pub struct World {
     tiles_type: Vec<TileTexture>,
@@ -35,10 +28,9 @@ impl World {
 
         let entities = (0..agent_count)
             .map(|i| Entity {
-                pos_x: 0,
-                pos_y: 0,
+                pos: (0, 0),
                 ty: EntityType::Agent(Agent {
-                    job_id: (i % 32) as u8,
+                    job_id: (i % 64) as u8,
                     health: 255,
                     cash: 0,
                 }),
@@ -120,27 +112,44 @@ impl World {
     pub fn step(&mut self) {
         let mut entities = std::mem::take(&mut self.entities);
         for (i, entity) in entities.iter_mut().enumerate() {
-            let current_idx = self.idx(entity.pos_x.into(), entity.pos_y.into());
-            match entity
-                .agent()
-                .unwrap()
-                .preferred_action((entity.pos_x, entity.pos_y), &self)
-            {
-                AgentAction::Move(x, y) => {
-                    let idx = self.idx(x.into(), y.into());
-                    if self.tiles_agent[idx].is_none() {
-                        self.tiles_agent[current_idx] = None;
-                        self.tiles_agent[idx] = Some(EntityId::new(i));
-                        entity.pos_x = x;
-                        entity.pos_y = y;
-                    }
+            match &entity.ty {
+                EntityType::Agent(a) => {
+                    self.step_agent(a, &mut entity.pos, i);
                 }
-                AgentAction::None => {}
-                _ => unimplemented!(),
+                EntityType::Resource(r) => {
+                    self.step_resource(r, &mut entity.pos, i);
+                }
+                EntityType::Building(b) => {
+                    self.step_building(b, &mut entity.pos, i)
+                }
             }
         }
         self.entities = entities;
-        // self.tiles_action.iter_mut().for_each(|a|)
+    }
+
+    fn step_agent(&mut self, a: &Agent, pos: &mut (u16, u16), i: usize) {
+        let current_tile_idx = self.idx(pos.0.into(), pos.1.into());
+        match a.preferred_action(*pos, &self) {
+            AgentAction::Move(x, y) => {
+                let idx = self.idx(x.into(), y.into());
+                if self.tiles_agent[idx].is_none() {
+                    self.tiles_agent[current_tile_idx] = None;
+                    self.tiles_agent[idx] = Some(EntityId::new(i));
+                    pos.0 = x;
+                    pos.1 = y;
+                }
+            }
+            AgentAction::None => {}
+            _ => unimplemented!(),
+        }
+    }
+
+    fn step_resource(&mut self, r: &Resource, pos: &mut (u16, u16), i: usize) {
+        let _current_tile_idx = self.idx(pos.0.into(), pos.1.into());
+    }
+
+    fn step_building(&mut self, r: &Building, pos: &mut (u16, u16), i: usize) {
+        let _current_tile_idx = self.idx(pos.0.into(), pos.1.into());
     }
 
     pub fn update_grid(&self, display: &Display, grid: &mut CanvasGrid) {
@@ -163,7 +172,7 @@ impl World {
         grid.update_agents(
             display,
             self.entities.iter().map(|a| Sprite {
-                vertex: Vf2::new(a.pos_x as f32 * 10., a.pos_y as f32 * 10.),
+                vertex: Vf2::new(a.pos.0 as f32 * 10., a.pos.1 as f32 * 10.),
                 size: Vf2::new(10., 10.),
                 texture_index: a.agent().unwrap().job_id as i32,
             }),

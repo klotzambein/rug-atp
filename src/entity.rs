@@ -3,9 +3,7 @@
 
 use std::num::NonZeroU16;
 
-use rand::Rng;
-
-use crate::{agent::Agent, world::World};
+use crate::{agent::Agent, building::Building, resources::Resource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -19,8 +17,7 @@ impl EntityId {
 
 #[derive(Debug, Clone, Hash)]
 pub struct Entity {
-    pub pos_x: u16,
-    pub pos_y: u16,
+    pub pos: (u16, u16),
     pub ty: EntityType,
 }
 
@@ -32,10 +29,19 @@ impl Entity {
             None
         }
     }
+
+    pub fn texture(&self) -> i32 {
+        match &self.ty {
+            EntityType::Agent(a) => a.job_id.into(),
+            EntityType::Resource(_) => 0,
+            EntityType::Building(_) => 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Hash)]
 pub enum EntityType {
     Agent(Agent),
-    Resource(),
+    Resource(Resource),
+    Building(Building),
 }
