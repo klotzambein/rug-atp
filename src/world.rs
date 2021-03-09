@@ -2,11 +2,13 @@ use dear_gui::graphics::primitives::{Sprite, Vf2};
 use glium::Display;
 
 use crate::{
-    agent::{Agent, AgentAction},
-    building::Building,
+    entity::{
+        agent::{Agent, AgentAction},
+        building::Building,
+        resources::Resource,
+    },
     entity::{Entity, EntityId, EntityType},
     grid::CanvasGrid,
-    resources::Resource,
     tile::TileTexture,
 };
 
@@ -37,7 +39,7 @@ impl World {
             .map(|i| Entity {
                 pos: (0, 0),
                 ty: EntityType::Agent(Agent {
-                    job_id: (i % 64) as u8,
+                    job_id: (i % 48) as u8,
                     health: 255,
                     cash: 0,
                 }),

@@ -3,7 +3,11 @@
 
 use std::num::NonZeroU16;
 
-use crate::{agent::Agent, building::Building, resources::Resource};
+pub mod agent;
+pub mod building;
+pub mod resources;
+
+use self::{agent::Agent, building::Building, resources::Resource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]

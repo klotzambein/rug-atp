@@ -4,14 +4,12 @@ use dear_gui::AppInit;
 use entity::EntityId;
 use glium::Surface;
 
-pub mod agent;
-pub mod building;
 pub mod entity;
 pub mod grid;
-pub mod resources;
 pub mod tile;
 pub mod ui;
 pub mod world;
+pub mod generation;
 
 use grid::CanvasGrid;
 use ui::UI;
@@ -30,6 +28,8 @@ fn main() {
         let ui = ui.clone();
         Box::new(move |pos| {
             println!("User clicked: {:?}", pos);
+            // TODO: Convert coordinstes to tile space
+            // TODO: Get tile and entity
             // TODO: Select correct entity
             ui.borrow_mut().selected_entity = Some(EntityId::new(12));
         })
