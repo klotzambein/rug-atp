@@ -1,5 +1,6 @@
 use dear_gui::graphics::primitives::{Sprite, Vf2};
 use glium::Display;
+use rand::prelude::Distribution;
 
 use crate::{
     entity::{
@@ -8,32 +9,28 @@ use crate::{
         resources::Resource,
     },
     entity::{Entity, EntityId, EntityType},
+    generation::TileDistribution,
     grid::CanvasGrid,
     tile::TileTexture,
 };
 
 pub struct World {
-    tiles_type: Vec<TileTexture>,
-    tiles_agent: Vec<Option<EntityId>>,
+    pub tiles_type: Vec<TileTexture>,
+    pub tiles_entity: Vec<Option<EntityId>>,
     // tiles_resource: Vec<u8>,
     // tiles_action: Vec<TileAction>,
     entities: Vec<Entity>,
     // conflicts: Vec<Vec<TileAction>>,
-    pub width: usize, // Q from Andrei: Should this remain usize or u16?
+    pub width: usize,
     pub height: usize,
 }
 
 impl World {
     pub fn new(width: usize, height: usize, agent_count: usize) -> World {
-        let tiles_type = std::iter::repeat_with(|| {
-            if rand::random::<f32>() < 0.6 {
-                TileTexture::Grass
-            } else {
-                TileTexture::GrassRock
-            }
-        })
-        .take(width * height)
-        .collect::<Vec<_>>();
+        let tile_distr = TileDistribution::new_v1();
+        let tiles_type = std::iter::repeat_with(|| tile_distr.sample(&mut rand::thread_rng()).0)
+            .take(width * height)
+            .collect::<Vec<_>>();
 
         let entities = (0..agent_count)
             .map(|i| Entity {
@@ -48,7 +45,7 @@ impl World {
 
         World {
             tiles_type,
-            tiles_agent: vec![None; width * height],
+            tiles_entity: vec![None; width * height],
             // tiles_resource: vec![0; width * height],
             // tiles_action: vec![TileAction::default(); width * height],
             entities,
@@ -58,7 +55,7 @@ impl World {
         }
     }
 
-    fn idx(&self, x: usize, y: usize) -> usize {
+    pub fn idx(&self, x: usize, y: usize) -> usize {
         debug_assert!(x < self.width && y < self.height);
         x + y * self.width
     }
@@ -113,9 +110,9 @@ impl World {
         match a.preferred_action(*pos, &self) {
             AgentAction::Move(x, y) => {
                 let idx = self.idx(x.into(), y.into());
-                if self.tiles_agent[idx].is_none() {
-                    self.tiles_agent[current_tile_idx] = None;
-                    self.tiles_agent[idx] = Some(EntityId::new(i));
+                if self.tiles_entity[idx].is_none() {
+                    self.tiles_entity[current_tile_idx] = None;
+                    self.tiles_entity[idx] = Some(EntityId::new(i));
                     pos.0 = x;
                     pos.1 = y;
                 }

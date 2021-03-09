@@ -60,6 +60,8 @@ impl UI {
                     }
                     _ => unimplemented!(),
                 }
+            } else {
+                // No entity
             }
         });
     }

@@ -1,2 +1,5 @@
 #[derive(Debug, Clone, Hash)]
-pub struct Building {}
+pub enum Building {
+    Market,
+    Hut,
+}

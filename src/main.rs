@@ -5,11 +5,11 @@ use entity::EntityId;
 use glium::Surface;
 
 pub mod entity;
+pub mod generation;
 pub mod grid;
 pub mod tile;
 pub mod ui;
 pub mod world;
-pub mod generation;
 
 use grid::CanvasGrid;
 use ui::UI;
@@ -24,18 +24,32 @@ fn main() {
     let world = Rc::new(RefCell::new(World::new(320, 320, 1_000)));
 
     app.set_canvas_click_handler({
-        let _world = world.clone();
+        let world = world.clone();
         let ui = ui.clone();
         Box::new(move |pos| {
+            let world = world.borrow_mut();
             println!("User clicked: {:?}", pos);
+
             // TODO: Convert coordinstes to tile space
-            // TODO: Get tile and entity
-            // TODO: Select correct entity
-            ui.borrow_mut().selected_entity = Some(EntityId::new(12));
+            let tile_x = ((pos.x + 5.) / 10.) as isize;
+            let tile_y = ((pos.y + 5.) / 10.) as isize;
+
+            if ((tile_x as usize) < world.width)
+                && ((tile_y as usize) < world.height)
+                && (tile_x >= 0)
+                && (tile_y >= 0)
+            {
+                let current_tile_idx = world.idx(tile_x as usize, tile_y as usize);
+                println!("Corresponding tile: {:?}", current_tile_idx);
+                // TODO: Get tile and entity
+                ui.borrow_mut().selected_entity = world.tiles_entity[current_tile_idx];
+                // TODO: Select correct entity
+                // let current_entity =  world.entity(e_id);
+            }
         })
     });
 
-    for i in 0..100_000 {
+    for i in 0..1_000 {
         if i % 10000 == 0 {
             dbg!(i);
         }
