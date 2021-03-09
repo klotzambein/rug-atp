@@ -1,4 +1,2 @@
 #[derive(Debug, Clone, Hash)]
-pub struct Building {
-
-}
+pub struct Building {}

@@ -13,6 +13,10 @@ impl EntityId {
     pub fn new(idx: usize) -> EntityId {
         EntityId(NonZeroU16::new((idx + 1) as u16).expect("Agent ID overflow"))
     }
+
+    pub fn as_index(self) -> usize {
+        self.0.get() as usize
+    }
 }
 
 #[derive(Debug, Clone, Hash)]

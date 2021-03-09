@@ -13,5 +13,5 @@ impl ResourceId {
 #[derive(Debug, Clone, Default, Hash)]
 pub struct Resource {
     pub amount: u8,
-    pub refresh: u8,   // Time to refresh a resource (0 for non-regenerable).
+    pub refresh: u8, // Time to refresh a resource (0 for non-regenerable).
 }

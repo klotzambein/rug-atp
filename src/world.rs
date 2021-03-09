@@ -1,7 +1,14 @@
 use dear_gui::graphics::primitives::{Sprite, Vf2};
 use glium::Display;
 
-use crate::{agent::{Agent, AgentAction}, building::Building, entity::{Entity, EntityId, EntityType}, grid::CanvasGrid, resources::Resource, tile::{TileTexture}};
+use crate::{
+    agent::{Agent, AgentAction},
+    building::Building,
+    entity::{Entity, EntityId, EntityType},
+    grid::CanvasGrid,
+    resources::Resource,
+    tile::TileTexture,
+};
 
 pub struct World {
     tiles_type: Vec<TileTexture>,
@@ -79,35 +86,9 @@ impl World {
             })
     }
 
-    // pub fn step_game_of_life(&mut self) {
-    //     std::mem::swap(&mut self.old_tiles, &mut self.tiles);
-    //     let mut tiles = std::mem::take(&mut self.tiles);
-    //     for ((x, y), ts) in self.iter_neighbours() {
-    //         let n_count: usize = ts
-    //             .iter()
-    //             .map(|x| (x.texture != TileTexture::Grass) as usize)
-    //             .sum();
-    //         let live = match (ts[4].texture != TileTexture::Grass, n_count) {
-    //             (false, 3) => true,
-    //             (true, 3) | (true, 4) => true,
-    //             _ => false,
-    //         };
-    //         tiles[x + y * self.width].texture = if live {
-    //             TileTexture::SandPalm
-    //         } else {
-    //             TileTexture::Grass
-    //         };
-    //     }
-    //     self.tiles = tiles;
-    // }
-    // fn create_conflict(&mut self, a: TileAction, b: TileAction) -> u16 {
-    //     self.conflicts.push(vec![a, b]);
-    //     (self.conflicts.len() - 1) as u16
-    // }
-
-    // fn add_to_conflict(&mut self, conflict: u16, a: TileAction) {
-    //     self.conflicts[conflict as usize].push(a);
-    // }
+    pub fn entity(&self, id: EntityId) -> &Entity {
+        &self.entities[id.as_index()]
+    }
 
     pub fn step(&mut self) {
         let mut entities = std::mem::take(&mut self.entities);
@@ -119,9 +100,7 @@ impl World {
                 EntityType::Resource(r) => {
                     self.step_resource(r, &mut entity.pos, i);
                 }
-                EntityType::Building(b) => {
-                    self.step_building(b, &mut entity.pos, i)
-                }
+                EntityType::Building(b) => self.step_building(b, &mut entity.pos, i),
             }
         }
         self.entities = entities;
@@ -144,11 +123,11 @@ impl World {
         }
     }
 
-    fn step_resource(&mut self, r: &Resource, pos: &mut (u16, u16), i: usize) {
+    fn step_resource(&mut self, _r: &Resource, pos: &mut (u16, u16), _i: usize) {
         let _current_tile_idx = self.idx(pos.0.into(), pos.1.into());
     }
 
-    fn step_building(&mut self, r: &Building, pos: &mut (u16, u16), i: usize) {
+    fn step_building(&mut self, _b: &Building, pos: &mut (u16, u16), _i: usize) {
         let _current_tile_idx = self.idx(pos.0.into(), pos.1.into());
     }
 
