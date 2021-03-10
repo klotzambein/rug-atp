@@ -23,6 +23,7 @@ pub struct World {
     // conflicts: Vec<Vec<TileAction>>,
     pub width: usize,
     pub height: usize,
+    pub dirty: bool,
 }
 
 impl World {
@@ -62,6 +63,7 @@ impl World {
             // conflicts: Vec::new(),
             width,
             height,
+            dirty: true,
         }
     }
 
@@ -177,21 +179,24 @@ impl World {
         let _current_tile_idx = self.idx(*pos);
     }
 
-    pub fn update_grid(&self, display: &Display, grid: &mut CanvasGrid) {
+    pub fn update_grid(&mut self, display: &Display, grid: &mut CanvasGrid) {
         assert_eq!(grid.width * 32, self.width);
         assert_eq!(grid.height * 32, self.height);
-        for cx in 0..grid.width {
-            for cy in 0..grid.height {
-                let start = cy * 32 * self.width + cx * 32;
-                grid.update_chunk(
-                    (cx, cy),
-                    (0..32).flat_map(|y| {
-                        self.tiles_type[start + y * self.width..start + y * self.width + 32]
-                            .iter()
-                            .copied()
-                    }),
-                )
+        if self.dirty {
+            for cx in 0..grid.width {
+                for cy in 0..grid.height {
+                    let start = cy * 32 * self.width + cx * 32;
+                    grid.update_chunk(
+                        (cx, cy),
+                        (0..32).flat_map(|y| {
+                            self.tiles_type[start + y * self.width..start + y * self.width + 32]
+                                .iter()
+                                .copied()
+                        }),
+                    )
+                }
             }
+            self.dirty = false;
         }
 
         grid.update_agents(

@@ -12,7 +12,7 @@ use dear_gui::{
     },
     texture::load_png_texture,
 };
-use glium::VertexBuffer;
+use glium::{VertexBuffer};
 use glium::{texture::Texture2d, Display};
 
 use euclid::{Box2D, Point2D, Vector2D};

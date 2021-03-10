@@ -1,7 +1,7 @@
 // TODO: For every company/resource ID they meet, they add them to their table of
 //       met entities and calculate the reward expectation using an RL algorithm.
 
-use std::num::NonZeroU16;
+use std::num::NonZeroU32;
 
 pub mod agent;
 pub mod building;
@@ -13,11 +13,11 @@ use self::{agent::Agent, building::Building, resources::Resource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct EntityId(NonZeroU16);
+pub struct EntityId(NonZeroU32);
 
 impl EntityId {
     pub fn new(idx: usize) -> EntityId {
-        EntityId(NonZeroU16::new((idx + 1) as u16).expect("Agent ID overflow"))
+        EntityId(NonZeroU32::new((idx + 1) as u32).expect("Agent ID overflow"))
     }
 
     pub fn as_index(self) -> usize {

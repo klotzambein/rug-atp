@@ -14,16 +14,18 @@ use grid::CanvasGrid;
 use ui::UI;
 use world::{Pos, World};
 
+const WORLD_CHUNK_LEN: usize = 30;
+
 fn main() {
     let mut app = AppInit::new();
 
     let ui = Rc::new(RefCell::new(UI::new(app.imgui.clone())));
 
-    let mut grid = CanvasGrid::new(&app.display, 10, 10);
+    let mut grid = CanvasGrid::new(&app.display, WORLD_CHUNK_LEN, WORLD_CHUNK_LEN);
     let world = Rc::new(RefCell::new(World::new(
-        320,
-        320,
-        500,
+        WORLD_CHUNK_LEN * 32,
+        WORLD_CHUNK_LEN * 32,
+        2_000,
         &mut rand::thread_rng(),
     )));
 
@@ -61,7 +63,7 @@ fn main() {
     const PRE_RUN_STEPS: usize = 50_000;
     for i in 0..PRE_RUN_STEPS {
         if i % 1000 == 0 {
-            println!("{}%", i as f32 / PRE_RUN_STEPS as f32);
+            println!("{}%", i as f32 / PRE_RUN_STEPS as f32 * 100.);
         }
         world.borrow_mut().step();
     }

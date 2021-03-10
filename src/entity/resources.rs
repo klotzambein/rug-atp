@@ -1,3 +1,8 @@
+//! Resources are the source of basically all value im our simulation. Resources
+//! spawn on rocks on the world. And in some other spaces. They can be gathered
+//! by the agents. After a resource has been depleted it will respawn somewhere
+//! else on a new rock or other spot.
+
 use std::num::NonZeroU16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
