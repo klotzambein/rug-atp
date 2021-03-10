@@ -58,9 +58,10 @@ fn main() {
         })
     });
 
-    for i in 0..100_000 {
+    const PRE_RUN_STEPS: usize = 50_000;
+    for i in 0..PRE_RUN_STEPS {
         if i % 1000 == 0 {
-            dbg!(i);
+            println!("{}%", i as f32 / PRE_RUN_STEPS as f32);
         }
         world.borrow_mut().step();
     }
@@ -78,6 +79,5 @@ fn main() {
         }
         i = (i + 1) % 10;
         world.borrow_mut().update_grid(&app.display, &mut grid);
-
     });
 }
