@@ -4,15 +4,12 @@ use dear_gui::event_handling::Imgui;
 use glium::Surface;
 use imgui::{im_str, Ui, Window};
 
-use crate::{
-    entity::{EntityId, EntityType},
-    world::World,
-};
+use crate::{entity::EntityId, world::{Pos, World}};
 // We have idx_tile: usize -> world.tiles_type[idx_tile]: TileTexture -> get name through debug: String/str
 pub struct UI {
     pub imgui: Rc<RefCell<Imgui>>,
     pub selected_entity: Option<EntityId>,
-    pub selected_tile: Option<(u16, u16)>,
+    pub selected_tile: Option<Pos>,
 }
 
 impl UI {
@@ -58,18 +55,20 @@ impl UI {
                 let e = world.entity(e_id);
                 ui.text(&format!("Position: {:?}", e.pos));
                 match &e.ty {
-                    // EntityType::Agent(a) => { 
+                    // EntityType::Agent(a) => {
                     //     ui.text(&format!("Job: {:?}", a.job));
                     // }
                     e => ui.text(&format!("Selected: {:#?}", e)),
                 }
             } else {
-                if let Some(t) = self.selected_tile {
-                    let current_tile_idx = world.idx(t.0 as usize, t.1 as usize);
+                if let Some(p) = self.selected_tile {
+                    let current_tile_idx = world.idx(p);
 
-                    ui.text(&format!("Position: {:?}", t));
-                    ui.text(&format!("Tile Type: {:?}", world.tiles_type[current_tile_idx]));
-                    
+                    ui.text(&format!("Position: {:?}", p));
+                    ui.text(&format!(
+                        "Tile Type: {:?}",
+                        world.tiles_type[current_tile_idx]
+                    ));
                 }
             }
         });

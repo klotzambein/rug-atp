@@ -1,7 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
 use dear_gui::AppInit;
-use entity::EntityId;
 use glium::Surface;
 
 pub mod entity;
@@ -13,7 +12,7 @@ pub mod world;
 
 use grid::CanvasGrid;
 use ui::UI;
-use world::World;
+use world::{Pos, World};
 
 fn main() {
     let mut app = AppInit::new();
@@ -39,11 +38,12 @@ fn main() {
                 && (tile_x >= 0)
                 && (tile_y >= 0)
             {
-                let current_tile_idx = world.idx(tile_x as usize, tile_y as usize);
+                let pos = Pos(tile_x as u16, tile_y as u16);
+                let current_tile_idx = world.idx(pos);
                 println!("Corresponding tile: {:?}", current_tile_idx);
                 // TODO: Get tile and entity
                 let mut ui = ui.borrow_mut();
-                ui.selected_tile = Some((tile_x as u16, tile_y as u16));
+                ui.selected_tile = Some(pos);
                 ui.selected_entity = world.tiles_entity[current_tile_idx];
                 // TODO: Select correct entity
                 // let current_entity =  world.entity(e_id);

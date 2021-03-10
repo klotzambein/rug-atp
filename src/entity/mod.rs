@@ -7,6 +7,8 @@ pub mod agent;
 pub mod building;
 pub mod resources;
 
+use crate::world::Pos;
+
 use self::{agent::Agent, building::Building, resources::Resource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,7 +27,7 @@ impl EntityId {
 
 #[derive(Debug, Clone, Hash)]
 pub struct Entity {
-    pub pos: (u16, u16),
+    pub pos: Pos,
     pub ty: EntityType,
 }
 
