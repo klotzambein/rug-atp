@@ -20,7 +20,12 @@ fn main() {
     let ui = Rc::new(RefCell::new(UI::new(app.imgui.clone())));
 
     let mut grid = CanvasGrid::new(&app.display, 10, 10);
-    let world = Rc::new(RefCell::new(World::new(320, 320, 1_000)));
+    let world = Rc::new(RefCell::new(World::new(
+        320,
+        320,
+        500,
+        &mut rand::thread_rng(),
+    )));
 
     app.set_canvas_click_handler({
         let world = world.clone();
@@ -38,7 +43,7 @@ fn main() {
                 && (tile_x >= 0)
                 && (tile_y >= 0)
             {
-                let pos = Pos(tile_x as u16, tile_y as u16);
+                let pos = Pos(tile_x as i16, tile_y as i16);
                 let current_tile_idx = world.idx(pos);
                 println!("Corresponding tile: {:?}", current_tile_idx);
                 // TODO: Get tile and entity
@@ -53,8 +58,8 @@ fn main() {
         })
     });
 
-    for i in 0..1_000 {
-        if i % 10000 == 0 {
+    for i in 0..100_000 {
+        if i % 1000 == 0 {
             dbg!(i);
         }
         world.borrow_mut().step();
@@ -74,6 +79,5 @@ fn main() {
         i = (i + 1) % 10;
         world.borrow_mut().update_grid(&app.display, &mut grid);
 
-        // ui.draw(last_frame, target, &state, &mut cmd);
     });
 }

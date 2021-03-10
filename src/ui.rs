@@ -2,9 +2,12 @@ use std::{cell::RefCell, rc::Rc, time::Instant};
 
 use dear_gui::event_handling::Imgui;
 use glium::Surface;
-use imgui::{im_str, Ui, Window};
+use imgui::{im_str, Condition, Ui, Window};
 
-use crate::{entity::EntityId, world::{Pos, World}};
+use crate::{
+    entity::EntityId,
+    world::{Pos, World},
+};
 // We have idx_tile: usize -> world.tiles_type[idx_tile]: TileTexture -> get name through debug: String/str
 pub struct UI {
     pub imgui: Rc<RefCell<Imgui>>,
@@ -50,18 +53,19 @@ impl UI {
     }
 
     fn window_inspector(&self, ui: &Ui, world: &World) {
-        Window::new(im_str!("Inspector")).build(ui, || {
-            if let Some(e_id) = self.selected_entity {
-                let e = world.entity(e_id);
-                ui.text(&format!("Position: {:?}", e.pos));
-                match &e.ty {
-                    // EntityType::Agent(a) => {
-                    //     ui.text(&format!("Job: {:?}", a.job));
-                    // }
-                    e => ui.text(&format!("Selected: {:#?}", e)),
-                }
-            } else {
-                if let Some(p) = self.selected_tile {
+        Window::new(im_str!("Inspector"))
+            .size([200., 200.], Condition::Once)
+            .build(ui, || {
+                if let Some(e_id) = self.selected_entity {
+                    let e = world.entity(e_id);
+                    ui.text(&format!("Position: {:?}", e.pos));
+                    match &e.ty {
+                        // EntityType::Agent(a) => {
+                        //     ui.text(&format!("Job: {:?}", a.job));
+                        // }
+                        e => ui.text(&format!("Selected: {:#?}", e)),
+                    }
+                } else if let Some(p) = self.selected_tile {
                     let current_tile_idx = world.idx(p);
 
                     ui.text(&format!("Position: {:?}", p));
@@ -69,9 +73,10 @@ impl UI {
                         "Tile Type: {:?}",
                         world.tiles_type[current_tile_idx]
                     ));
+                } else {
+                    ui.text("Nothing selected");
                 }
-            }
-        });
+            });
     }
 }
 

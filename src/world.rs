@@ -1,6 +1,6 @@
 use dear_gui::graphics::primitives::{Sprite, Vf2};
 use glium::Display;
-use rand::prelude::Distribution;
+use rand::Rng;
 
 use crate::{
     entity::{
@@ -9,7 +9,7 @@ use crate::{
         resources::Resource,
     },
     entity::{Entity, EntityId, EntityType},
-    generation::TileDistribution,
+    generation::BiomeMap,
     grid::CanvasGrid,
     tile::TileTexture,
 };
@@ -26,29 +26,26 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(width: usize, height: usize, agent_count: usize) -> World {
-        let tile_distr = TileDistribution::new_v1();
+    pub fn new(width: usize, height: usize, agent_count: usize, rng: &mut impl Rng) -> World {
+        let biomes = BiomeMap::new();
 
         let mut entities: Vec<_> = (0..agent_count)
             .map(|_i| Entity {
                 pos: Pos(0, 0),
                 ty: EntityType::Agent(Agent {
-                    job: Job::None,
+                    job: Job::Explorer,
                     health: 255,
                     cash: 0,
                 }),
             })
             .collect();
         let mut tiles_entity = vec![None; width * height];
-        let tiles_type = tile_distr
-            .sample_iter(&mut rand::thread_rng())
-            .enumerate()
-            .map(|(i, t)| {
+        let tiles_type = (0..width * height)
+            .map(|i| {
+                let pos = Pos((i % width) as i16, (i / width) as i16);
+                let t = biomes.get(pos, rng);
                 if let Some(e) = t.1 {
-                    entities.push(Entity {
-                        pos: Pos((i % width) as u16, (i / width) as u16),
-                        ty: e,
-                    });
+                    entities.push(Entity { pos, ty: e });
                     tiles_entity[i] = Some(EntityId::new(entities.len() - 1))
                 }
                 t.0
@@ -79,12 +76,12 @@ impl World {
         (0..self.width)
             .flat_map(move |x| (0..self.height).map(move |y| (x, y)))
             .map(move |(x, y)| {
-                let left = ((x + self.width - 1) % self.width) as u16;
-                let right = ((x + 1) % self.width) as u16;
-                let bot = ((y + self.width - 1) % self.width) as u16;
-                let top = ((y + 1) % self.width) as u16;
-                let x = x as u16;
-                let y = y as u16;
+                let left = ((x + self.width - 1) % self.width) as i16;
+                let right = ((x + 1) % self.width) as i16;
+                let bot = ((y + self.width - 1) % self.width) as i16;
+                let top = ((y + 1) % self.width) as i16;
+                let x = x as i16;
+                let y = y as i16;
                 (
                     Pos(x, y),
                     [
@@ -104,8 +101,8 @@ impl World {
 
     pub fn wrap_pos(&self, x: isize, y: isize) -> Pos {
         Pos(
-            x.rem_euclid(self.width as isize) as u16,
-            y.rem_euclid(self.width as isize) as u16,
+            x.rem_euclid(self.width as isize) as i16,
+            y.rem_euclid(self.width as isize) as i16,
         )
     }
 
@@ -213,4 +210,13 @@ impl World {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Pos(pub u16, pub u16);
+pub struct Pos(pub i16, pub i16);
+
+impl Pos {
+    pub fn wrap(self, world: &World) -> Self {
+        Pos(
+            self.0.rem_euclid(world.width as i16),
+            self.1.rem_euclid(world.height as i16),
+        )
+    }
+}

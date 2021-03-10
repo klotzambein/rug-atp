@@ -1,6 +1,9 @@
-use rand::Rng;
+use rand::{distributions::Standard, prelude::Distribution, Rng};
 
-use crate::{entity::EntityId, tile::TileTexture, world::{Pos, World}};
+use crate::{
+    tile::TileTexture,
+    world::{Pos, World},
+};
 
 #[derive(Debug, Clone, Hash)]
 pub struct Agent {
@@ -11,29 +14,38 @@ pub struct Agent {
 
 impl Agent {
     pub fn preferred_action(&self, pos: Pos, world: &World) -> AgentAction {
-        let dx = rand::thread_rng().gen_range(-1..=1);
-        let dy = rand::thread_rng().gen_range(-1..=1);
+        match self.job {
+            Job::None => AgentAction::None,
+            Job::CompanyMember(_) => AgentAction::None,
+            Job::Miner => AgentAction::None,
+            Job::Farmer => AgentAction::None,
+            Job::Explorer => {
+                let dir: Direction = rand::random();
 
-        let target_x = (pos.0 as i16 + world.width as i16 + dx) as u16 % world.width as u16;
-        let target_y = (pos.1 as i16 + world.height as i16 + dy) as u16 % world.height as u16;
+                let target = (pos + dir).wrap(world);
 
-        let tt = world.tile_type(pos);
+                let tt = world.tile_type(target);
 
-        if tt == TileTexture::Grass {
-            AgentAction::Move(Pos(target_x, target_y))
-        } else {
-            AgentAction::None
+                if tt == TileTexture::Grass {
+                    AgentAction::Move(target)
+                } else {
+                    AgentAction::None
+                }
+            }
+            Job::Fisher => AgentAction::None,
         }
     }
 }
 
 pub enum AgentAction {
+    /// Do nothing this step
     None,
+    /// Try to move to the given position
     Move(Pos),
-    Kill(EntityId),
-    // Invest(CompanyId),
+    /// Mine a resource at the given position
     Farm(Pos),
-    Scan(),
+    /// Enter a building at pos
+    Enter(Pos),
 }
 
 // TODO: Move to company.
@@ -47,8 +59,8 @@ pub enum Job {
     Farmer,
     Explorer,
     Fisher,
-    // Builder,
     // Butcher,
+    // Builder,
 }
 
 impl Job {
@@ -60,6 +72,51 @@ impl Job {
             Job::Farmer => 3,
             Job::Explorer => 4,
             Job::Fisher => 5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Direction {
+    Up,
+    UpRight,
+    Right,
+    DownRight,
+    Down,
+    DownLeft,
+    Left,
+    UpLeft,
+}
+
+impl std::ops::Add<Direction> for Pos {
+    type Output = Pos;
+
+    fn add(self, rhs: Direction) -> Self::Output {
+        match rhs {
+            Direction::Up => Pos(self.0, self.1 + 1),
+            Direction::UpRight => Pos(self.0 + 1, self.1 + 1),
+            Direction::Right => Pos(self.0 + 1, self.1),
+            Direction::DownRight => Pos(self.0 + 1, self.1 - 1),
+            Direction::Down => Pos(self.0, self.1 - 1),
+            Direction::DownLeft => Pos(self.0 - 1, self.1 - 1),
+            Direction::Left => Pos(self.0 - 1, self.1),
+            Direction::UpLeft => Pos(self.0 - 1, self.1 + 1),
+        }
+    }
+}
+
+impl Distribution<Direction> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Direction {
+        match rng.gen_range(0..8) {
+            0 => Direction::Up,
+            1 => Direction::UpRight,
+            2 => Direction::Right,
+            3 => Direction::DownRight,
+            4 => Direction::Down,
+            5 => Direction::DownLeft,
+            6 => Direction::Left,
+            7 => Direction::UpLeft,
+            _ => unreachable!(),
         }
     }
 }
