@@ -42,9 +42,13 @@ fn main() {
                 let current_tile_idx = world.idx(tile_x as usize, tile_y as usize);
                 println!("Corresponding tile: {:?}", current_tile_idx);
                 // TODO: Get tile and entity
-                ui.borrow_mut().selected_entity = world.tiles_entity[current_tile_idx];
+                let mut ui = ui.borrow_mut();
+                ui.selected_tile = Some((tile_x as u16, tile_y as u16));
+                ui.selected_entity = world.tiles_entity[current_tile_idx];
                 // TODO: Select correct entity
                 // let current_entity =  world.entity(e_id);
+            } else {
+                ui.borrow_mut().selected_tile = None;
             }
         })
     });

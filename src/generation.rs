@@ -30,7 +30,7 @@ impl TileDistribution {
                     Some(EntityType::Building(Building::Market)),
                 ),
             ],
-            weights: WeightedIndex::new(&[10, 5, 1, 1]).unwrap(),
+            weights: WeightedIndex::new(&[500, 200, 3, 1]).unwrap(),
         }
     }
 }

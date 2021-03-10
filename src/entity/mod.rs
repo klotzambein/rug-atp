@@ -19,7 +19,7 @@ impl EntityId {
     }
 
     pub fn as_index(self) -> usize {
-        self.0.get() as usize
+        self.0.get() as usize - 1
     }
 }
 
@@ -40,9 +40,10 @@ impl Entity {
 
     pub fn texture(&self) -> i32 {
         match &self.ty {
-            EntityType::Agent(a) => a.job_id.into(),
-            EntityType::Resource(_) => 0,
-            EntityType::Building(_) => 0,
+            EntityType::Agent(a) => a.job.texture(),
+            EntityType::Building(Building::Market) => 56,
+            EntityType::Building(Building::Hut) => 57,
+            _ => unimplemented!(),
         }
     }
 }

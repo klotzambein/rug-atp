@@ -2,9 +2,9 @@ use rand::Rng;
 
 use crate::{entity::EntityId, tile::TileTexture, world::World};
 
-#[derive(Debug, Clone, Default, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct Agent {
-    pub job_id: u8,
+    pub job: Job,
     pub health: u8,
     pub cash: u32,
 }
@@ -36,13 +36,30 @@ pub enum AgentAction {
     Scan(),
 }
 
-pub enum JobType {
+// TODO: Move to company.
+type CompanyId = u8;
+
+#[derive(Debug, Clone, Hash)]
+pub enum Job {
     None,
-    CompanyMember,
+    CompanyMember(CompanyId),
     Miner,
     Farmer,
     Explorer,
     Fisher,
     // Builder,
     // Butcher,
+}
+
+impl Job {
+    pub fn texture(&self) -> i32 {
+        match self {
+            Job::None => 0,
+            Job::CompanyMember(c) => *c as i32 + 8,
+            Job::Miner => 2,
+            Job::Farmer => 3,
+            Job::Explorer => 4,
+            Job::Fisher => 5,
+        }
+    }
 }

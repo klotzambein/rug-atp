@@ -4,7 +4,7 @@ use rand::prelude::Distribution;
 
 use crate::{
     entity::{
-        agent::{Agent, AgentAction},
+        agent::{Agent, AgentAction, Job},
         building::Building,
         resources::Resource,
     },
@@ -28,24 +28,37 @@ pub struct World {
 impl World {
     pub fn new(width: usize, height: usize, agent_count: usize) -> World {
         let tile_distr = TileDistribution::new_v1();
-        let tiles_type = std::iter::repeat_with(|| tile_distr.sample(&mut rand::thread_rng()).0)
-            .take(width * height)
-            .collect::<Vec<_>>();
 
-        let entities = (0..agent_count)
-            .map(|i| Entity {
+        let mut entities: Vec<_> = (0..agent_count)
+            .map(|_i| Entity {
                 pos: (0, 0),
                 ty: EntityType::Agent(Agent {
-                    job_id: (i % 48) as u8,
+                    job: Job::None,
                     health: 255,
                     cash: 0,
                 }),
             })
             .collect();
+        let mut tiles_entity = vec![None; width * height];
+        let tiles_type = tile_distr
+            .sample_iter(&mut rand::thread_rng())
+            .enumerate()
+            .map(|(i, t)| {
+                if let Some(e) = t.1 {
+                    entities.push(Entity {
+                        pos: ((i % width) as u16, (i / width) as u16),
+                        ty: e,
+                    });
+                    tiles_entity[i] = Some(EntityId::new(entities.len() - 1))
+                }
+                t.0
+            })
+            .take(width * height)
+            .collect::<Vec<_>>();
 
         World {
             tiles_type,
-            tiles_entity: vec![None; width * height],
+            tiles_entity,
             // tiles_resource: vec![0; width * height],
             // tiles_action: vec![TileAction::default(); width * height],
             entities,
@@ -152,7 +165,7 @@ impl World {
             self.entities.iter().map(|a| Sprite {
                 vertex: Vf2::new(a.pos.0 as f32 * 10., a.pos.1 as f32 * 10.),
                 size: Vf2::new(10., 10.),
-                texture_index: a.agent().unwrap().job_id as i32,
+                texture_index: a.texture(),
             }),
         )
     }

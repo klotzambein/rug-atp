@@ -8,17 +8,19 @@ use crate::{
     entity::{EntityId, EntityType},
     world::World,
 };
-
+// We have idx_tile: usize -> world.tiles_type[idx_tile]: TileTexture -> get name through debug: String/str
 pub struct UI {
     pub imgui: Rc<RefCell<Imgui>>,
     pub selected_entity: Option<EntityId>,
+    pub selected_tile: Option<(u16, u16)>,
 }
 
 impl UI {
     pub fn new(imgui: Rc<RefCell<Imgui>>) -> UI {
         UI {
             imgui,
-            selected_entity: Some(EntityId::new(19)),
+            selected_entity: None,
+            selected_tile: None,
         }
     }
 
@@ -52,16 +54,23 @@ impl UI {
 
     fn window_inspector(&self, ui: &Ui, world: &World) {
         Window::new(im_str!("Inspector")).build(ui, || {
-            if let Some(e) = self.selected_entity.map(|e| world.entity(e)) {
+            if let Some(e_id) = self.selected_entity {
+                let e = world.entity(e_id);
+                ui.text(&format!("Position: {:?}", e.pos));
                 match &e.ty {
-                    EntityType::Agent(a) => {
-                        ui.text(&format!("Pos: {:?}", e.pos));
-                        ui.text(&format!("Job id: {}", a.job_id));
-                    }
-                    _ => unimplemented!(),
+                    // EntityType::Agent(a) => { 
+                    //     ui.text(&format!("Job: {:?}", a.job));
+                    // }
+                    e => ui.text(&format!("Selected: {:#?}", e)),
                 }
             } else {
-                // No entity
+                if let Some(t) = self.selected_tile {
+                    let current_tile_idx = world.idx(t.0 as usize, t.1 as usize);
+
+                    ui.text(&format!("Position: {:?}", t));
+                    ui.text(&format!("Tile Type: {:?}", world.tiles_type[current_tile_idx]));
+                    
+                }
             }
         });
     }
