@@ -17,7 +17,7 @@ use glium::{texture::Texture2d, Display};
 
 use euclid::{Box2D, Point2D, Vector2D};
 
-use crate::tile::TileTexture;
+use crate::tile::TileType;
 
 pub struct CanvasGrid {
     chunks: Vec<GridChunk>,
@@ -94,7 +94,7 @@ impl CanvasGrid {
     pub fn update_chunk(
         &self,
         chunk: (usize, usize),
-        tiles: impl Iterator<Item = TileTexture> + Clone,
+        tiles: impl Iterator<Item = TileType> + Clone,
     ) {
         assert!(chunk.0 < self.width, chunk.1 < self.height);
         let chunk = &self.chunks[chunk.1 * self.width + chunk.0];

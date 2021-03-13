@@ -1,23 +1,35 @@
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 
 use crate::{
-    tile::TileTexture,
+    tile::TileType,
     world::{Pos, World},
 };
 
 #[derive(Debug, Clone, Hash)]
 pub struct Agent {
     pub job: Job,
-    pub health: u8,
+    // pub saturation: u8,
+    pub energy: u8,
     pub cash: u32,
 }
 
 impl Agent {
-    pub fn preferred_action(&self, pos: Pos, world: &World) -> AgentAction {
+    pub fn step(&mut self, pos: Pos, world: &World) -> AgentAction {
+        self.energy = self.energy.wrapping_sub(1);
         match self.job {
             Job::None => AgentAction::None,
             Job::CompanyMember(_) => AgentAction::None,
-            Job::Miner => AgentAction::None,
+            Job::Miner => {
+                let pos = world.find_tile_around(pos, 25, |p| match world.entity_at(p) {
+                    Some(e) => match e.ty {
+                        super::EntityType::Agent(_) => false,
+                        super::EntityType::Resource(_) => true,
+                        super::EntityType::Building(_) => false,
+                    },
+                    None => false,
+                });
+                AgentAction::None
+            }
             Job::Farmer => AgentAction::None,
             Job::Explorer => {
                 let dir: Direction = rand::random();
@@ -26,7 +38,7 @@ impl Agent {
 
                 let tt = world.tile_type(target);
 
-                if tt == TileTexture::Grass {
+                if tt.walkable() {
                     AgentAction::Move(target)
                 } else {
                     AgentAction::None

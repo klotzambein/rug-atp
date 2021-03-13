@@ -8,12 +8,12 @@ use rand::{
 
 use crate::{
     entity::{building::Building, EntityType},
-    tile::TileTexture,
+    tile::TileType,
     world::Pos,
 };
 
 const OCEAN_CUTOFF: isize = -300;
-const BEACH_CUTOFF: isize = -150;
+const BEACH_CUTOFF: isize = -250;
 
 pub struct Biome {
     tiles: TileDistribution,
@@ -92,7 +92,7 @@ impl BiomeMap {
         }
     }
 
-    pub fn get(&self, p: Pos, rng: &mut impl Rng) -> (TileTexture, Option<EntityType>) {
+    pub fn get(&self, p: Pos, rng: &mut impl Rng) -> (TileType, Option<EntityType>) {
         let pos = [p.0 as f64 /  5., p.1 as f64 / 5.];
         let elevation = (self.elevation.iter().map(|e| e.get(pos)).sum::<f64>() * 500.) as isize;
         let climate = (self.climate.iter().map(|e| e.get(pos)).sum::<f64>() * 500.) as isize;
@@ -107,7 +107,7 @@ impl BiomeMap {
 }
 
 pub struct TileDistribution {
-    tiles: Vec<(TileTexture, Option<EntityType>)>,
+    tiles: Vec<(TileType, Option<EntityType>)>,
     weights: WeightedIndex<u16>,
 }
 
@@ -115,14 +115,14 @@ impl TileDistribution {
     pub fn grass() -> TileDistribution {
         TileDistribution {
             tiles: vec![
-                (TileTexture::Grass, None),
-                (TileTexture::GrassRock, None),
+                (TileType::Grass, None),
+                (TileType::GrassRock, None),
                 (
-                    TileTexture::Grass,
+                    TileType::Grass,
                     Some(EntityType::Building(Building::Hut)),
                 ),
                 (
-                    TileTexture::Grass,
+                    TileType::Grass,
                     Some(EntityType::Building(Building::Market)),
                 ),
             ],
@@ -133,10 +133,10 @@ impl TileDistribution {
     pub fn high_lands() -> TileDistribution {
         TileDistribution {
             tiles: vec![
-                (TileTexture::Dirt, None),
-                (TileTexture::DirtRock, None),
-                (TileTexture::DirtTreeDead, None),
-                (TileTexture::Dirt, Some(EntityType::Building(Building::Hut))),
+                (TileType::Dirt, None),
+                (TileType::DirtRock, None),
+                (TileType::DirtTreeDead, None),
+                (TileType::Dirt, Some(EntityType::Building(Building::Hut))),
             ],
             weights: WeightedIndex::new(&[2000, 20, 10, 1]).unwrap(),
         }
@@ -144,18 +144,18 @@ impl TileDistribution {
 
     pub fn ocean() -> TileDistribution {
         TileDistribution {
-            tiles: vec![(TileTexture::Water, None), (TileTexture::WaterRock, None)],
+            tiles: vec![(TileType::Water, None), (TileType::WaterRock, None)],
             weights: WeightedIndex::new(&[1000, 1]).unwrap(),
         }
     }
     pub fn desert() -> TileDistribution {
         TileDistribution {
             tiles: vec![
-                (TileTexture::Sand, None),
-                (TileTexture::SandRock, None),
-                (TileTexture::SandTreeDead, None),
+                (TileType::Sand, None),
+                (TileType::SandRock, None),
+                (TileType::SandTreeDead, None),
                 (
-                    TileTexture::Sand,
+                    TileType::Sand,
                     Some(EntityType::Building(Building::Market)),
                 ),
             ],
@@ -165,17 +165,17 @@ impl TileDistribution {
     pub fn beach() -> TileDistribution {
         TileDistribution {
             tiles: vec![
-                (TileTexture::Sand, None),
-                (TileTexture::SandPalm, None),
-                (TileTexture::SandTreeDead, None),
+                (TileType::Sand, None),
+                (TileType::SandPalm, None),
+                (TileType::SandTreeDead, None),
             ],
             weights: WeightedIndex::new(&[1000, 20, 5]).unwrap(),
         }
     }
 }
 
-impl Distribution<(TileTexture, Option<EntityType>)> for TileDistribution {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> (TileTexture, Option<EntityType>) {
+impl Distribution<(TileType, Option<EntityType>)> for TileDistribution {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> (TileType, Option<EntityType>) {
         self.tiles[self.weights.sample(rng)].clone()
     }
 }

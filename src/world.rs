@@ -11,11 +11,11 @@ use crate::{
     entity::{Entity, EntityId, EntityType},
     generation::BiomeMap,
     grid::CanvasGrid,
-    tile::TileTexture,
+    tile::TileType,
 };
 
 pub struct World {
-    pub tiles_type: Vec<TileTexture>,
+    pub tiles_type: Vec<TileType>,
     pub tiles_entity: Vec<Option<EntityId>>,
     // tiles_resource: Vec<u8>,
     // tiles_action: Vec<TileAction>,
@@ -35,8 +35,9 @@ impl World {
                 pos: Pos(0, 0),
                 ty: EntityType::Agent(Agent {
                     job: Job::Explorer,
-                    health: 255,
                     cash: 0,
+                    // saturation: 255,
+                    energy: 255,
                 }),
             })
             .collect();
@@ -74,7 +75,7 @@ impl World {
         x + y * self.width
     }
 
-    pub fn iter_neighbours(&self) -> impl Iterator<Item = (Pos, [TileTexture; 9])> + '_ {
+    pub fn iter_neighbours(&self) -> impl Iterator<Item = (Pos, [TileType; 9])> + '_ {
         (0..self.width)
             .flat_map(move |x| (0..self.height).map(move |y| (x, y)))
             .map(move |(x, y)| {
@@ -109,7 +110,7 @@ impl World {
     }
 
     /// This function searches for a tile around the given position, by going
-    /// around in a coil. We will call the closure until it returns true, or we
+    /// around in a spiral. We will call the closure until it returns true, or we
     /// reach n tiles.
     pub fn find_tile_around(
         &self,
@@ -118,7 +119,7 @@ impl World {
         mut f: impl FnMut(Pos) -> bool,
     ) -> Option<Pos> {
         (2..)
-            .map(|i| (i / 2, (i - 2) % 4))
+            .map(|i| (i / 2, i % 4))
             .flat_map(|(n, d)| std::iter::repeat(d).take(n))
             .scan((p.0 as isize, p.1 as isize), |p, d| {
                 let pos = self.wrap_pos(p.0, p.1);
@@ -139,10 +140,15 @@ impl World {
         &self.entities[id.as_index()]
     }
 
+    pub fn entity_at(&self, pos: Pos) -> Option<&Entity> {
+        let e = self.tiles_entity[self.idx(pos)]?;
+        Some(&self.entities[e.as_index()])
+    }
+
     pub fn step(&mut self) {
-        let mut entities = std::mem::take(&mut self.entities);
-        for (i, entity) in entities.iter_mut().enumerate() {
-            match &entity.ty {
+        for i in 0..self.entities.len() {
+            let mut entity = self.entities[i].clone();
+            match &mut entity.ty {
                 EntityType::Agent(a) => {
                     self.step_agent(a, &mut entity.pos, i);
                 }
@@ -151,13 +157,13 @@ impl World {
                 }
                 EntityType::Building(b) => self.step_building(b, &mut entity.pos, i),
             }
+            self.entities[i] = entity;
         }
-        self.entities = entities;
     }
 
-    fn step_agent(&mut self, a: &Agent, pos: &mut Pos, i: usize) {
+    fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, i: usize) {
         let current_tile_idx = self.idx(*pos);
-        match a.preferred_action(*pos, &self) {
+        match a.step(*pos, &self) {
             AgentAction::Move(p) => {
                 let idx = self.idx(p);
                 if self.tiles_entity[idx].is_none() {
@@ -209,7 +215,7 @@ impl World {
         )
     }
 
-    pub fn tile_type(&self, p: Pos) -> TileTexture {
+    pub fn tile_type(&self, p: Pos) -> TileType {
         self.tiles_type[self.idx(p)]
     }
 }
