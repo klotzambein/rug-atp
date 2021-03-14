@@ -54,6 +54,7 @@ impl Entity {
             EntityType::Agent(a) => a.job.texture(),
             EntityType::Building(Building::Market) => 56,
             EntityType::Building(Building::Hut { .. }) => 57,
+            EntityType::Resource(Resource::Berry(_)) => 33,
             _ => unimplemented!(),
         }
     }

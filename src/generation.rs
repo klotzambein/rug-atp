@@ -7,7 +7,7 @@ use rand::{
 };
 
 use crate::{
-    entity::{building::Building, EntityType},
+    entity::{building::Building, resources::Resource, EntityType},
     tile::TileType,
     world::Pos,
 };
@@ -125,8 +125,14 @@ impl TileDistribution {
                     TileType::Grass,
                     Some(EntityType::Building(Building::Market)),
                 ),
+                // TODO IVO: This is an example of how to add resources to a biome
+                (
+                    TileType::Grass,
+                    Some(EntityType::Resource(Resource::Berry(255))),
+                ),
             ],
-            weights: WeightedIndex::new(&[5000, 200, 30, 10]).unwrap(),
+            // TODO IVO: Don't forget to update the weights
+            weights: WeightedIndex::new(&[5000, 200, 30, 10, 30]).unwrap(),
         }
     }
 
@@ -136,7 +142,10 @@ impl TileDistribution {
                 (TileType::Dirt, None),
                 (TileType::DirtRock, None),
                 (TileType::DirtTreeDead, None),
-                (TileType::Dirt, Some(EntityType::Building(Building::hut_uninitialized()))),
+                (
+                    TileType::Dirt,
+                    Some(EntityType::Building(Building::hut_uninitialized())),
+                ),
             ],
             weights: WeightedIndex::new(&[2000, 20, 10, 1]).unwrap(),
         }

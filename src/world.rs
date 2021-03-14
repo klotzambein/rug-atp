@@ -24,6 +24,8 @@ pub struct World {
     pub width: usize,
     pub height: usize,
     pub dirty: bool,
+    pub tick: u32,
+    pub is_running: bool,
 }
 
 impl World {
@@ -60,6 +62,8 @@ impl World {
             width,
             height,
             dirty: true,
+            tick: 0,
+            is_running: true,
         }
     }
 
@@ -136,6 +140,12 @@ impl World {
     }
 
     pub fn step(&mut self) {
+        if self.is_running {
+            self.step_once()
+        }
+    }
+
+    pub fn step_once(&mut self) {
         for i in 0..self.entities.len() {
             let mut entity = self.entities[i].clone();
             let id = EntityId::new(i);
@@ -150,6 +160,7 @@ impl World {
             }
             self.entities[i] = entity;
         }
+        self.tick += 1;
     }
 
     fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, in_building: &mut bool, id: EntityId) {
@@ -166,11 +177,11 @@ impl World {
             AgentAction::Leave(p) => {
                 assert!(*in_building);
                 assert!(self.tile_is_walkable(p));
-                
+
                 // Modify agent entity
                 *in_building = false;
                 *pos = p;
-                
+
                 // Set destination tile entity
                 let idx = self.idx(p);
                 self.tiles_entity[idx] = Some(id);
@@ -191,6 +202,7 @@ impl World {
 
     fn step_resource(&mut self, _r: &Resource, pos: &mut Pos, _i: usize) {
         let _current_tile_idx = self.idx(*pos);
+        // TODO IVO: This is called for every resource every tick
     }
 
     fn step_building(&mut self, _b: &Building, pos: &mut Pos, _i: usize) {
