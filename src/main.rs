@@ -25,7 +25,6 @@ fn main() {
     let world = Rc::new(RefCell::new(World::new(
         WORLD_CHUNK_LEN * 32,
         WORLD_CHUNK_LEN * 32,
-        2_000,
         &mut rand::thread_rng(),
     )));
 
@@ -36,16 +35,16 @@ fn main() {
             let world = world.borrow_mut();
             println!("User clicked: {:?}", pos);
 
-            // TODO: Convert coordinstes to tile space
-            let tile_x = ((pos.x + 5.) / 10.) as isize;
-            let tile_y = ((pos.y + 5.) / 10.) as isize;
+            // Convert coordinates to tile space
+            let tile_x = ((pos.x + 5.) / 10.).floor() as i16;
+            let tile_y = ((pos.y + 5.) / 10.).floor() as i16;
 
             if ((tile_x as usize) < world.width)
                 && ((tile_y as usize) < world.height)
                 && (tile_x >= 0)
                 && (tile_y >= 0)
             {
-                let pos = Pos(tile_x as i16, tile_y as i16);
+                let pos = Pos(tile_x, tile_y);
                 let current_tile_idx = world.idx(pos);
                 println!("Corresponding tile: {:?}", current_tile_idx);
                 // TODO: Get tile and entity
@@ -60,7 +59,7 @@ fn main() {
         })
     });
 
-    const PRE_RUN_STEPS: usize = 50_000;
+    const PRE_RUN_STEPS: usize = 0;//50_000;
     for i in 0..PRE_RUN_STEPS {
         if i % 1000 == 0 {
             println!("{}%", i as f32 / PRE_RUN_STEPS as f32 * 100.);
@@ -68,7 +67,7 @@ fn main() {
         world.borrow_mut().step();
     }
 
-    let mut i = 0;
+    let mut i = 1;
     app.run(move |app, target, last_frame| {
         target.clear_color_srgb(242. / 255., 206. / 255., 223. / 255., 1.);
 
@@ -79,7 +78,7 @@ fn main() {
         if i == 0 {
             world.borrow_mut().step();
         }
-        i = (i + 1) % 10;
+        i = (i + 1) % 50;
         world.borrow_mut().update_grid(&app.display, &mut grid);
     });
 }

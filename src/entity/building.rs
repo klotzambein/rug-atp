@@ -16,7 +16,7 @@ impl Building {
         }
     }
 
-    pub fn initialize(&mut self, _pos: Pos, entities: &mut Vec<Entity>) {
+    pub fn initialize(&mut self, pos: Pos, entities: &mut Vec<Entity>) {
         match self {
             Building::Hut {
                 is_agent_in: _,
@@ -24,11 +24,21 @@ impl Building {
             } if agent.is_uninitialized() => {
                 *agent = EntityId::new(entities.len());
                 entities.push(Entity {
-                    pos: Pos(-1, -1),
+                    pos,
+                    in_building: true,
                     ty: EntityType::Agent(Agent::default()),
                 })
             }
             _ => {}
+        }
+    }
+
+    pub fn agent_leave(&mut self, _id: EntityId) {
+        match self {
+            Building::Market => {}
+            Building::Hut { is_agent_in, .. } => {
+                *is_agent_in = false;
+            }
         }
     }
 }

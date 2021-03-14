@@ -18,12 +18,20 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn step(&mut self, pos: Pos, world: &World) -> AgentAction {
+    pub fn step(&mut self, in_building: bool, pos: Pos, world: &World) -> AgentAction {
+        if in_building {
+            if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
+                return AgentAction::Leave(p);
+            } else {
+                return AgentAction::None;
+            }
+        }
+
         self.energy = self.energy.wrapping_sub(1);
         match self.job {
             Job::None => AgentAction::None,
             Job::Lumberer => {
-                let pos = world.find_tile_around(pos, 25, |p| match world.entity_at(p) {
+                let _pos = world.find_tile_around(pos, 25, |p| match world.entity_at(p) {
                     Some(e) => match e.ty {
                         super::EntityType::Agent(_) => false,
                         super::EntityType::Resource(_) => true,
@@ -39,9 +47,7 @@ impl Agent {
 
                 let target = (pos + dir).wrap(world);
 
-                let tt = world.tile_type(target);
-
-                if tt.walkable() {
+                if world.tile_is_walkable(target) {
                     AgentAction::Move(target)
                 } else {
                     AgentAction::None
@@ -53,6 +59,7 @@ impl Agent {
     }
 }
 
+#[derive(Debug, Clone, Copy, Hash)]
 pub enum AgentAction {
     /// Do nothing this step
     None,
@@ -62,10 +69,9 @@ pub enum AgentAction {
     Farm(Pos),
     /// Enter a building at pos
     Enter(Pos),
+    /// Leave a building and go to pos
+    Leave(Pos),
 }
-
-// TODO: Move to company.
-type CompanyId = u8;
 
 #[derive(Debug, Clone, Hash)]
 pub enum Job {

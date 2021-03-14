@@ -36,6 +36,7 @@ impl EntityId {
 #[derive(Debug, Clone, Hash)]
 pub struct Entity {
     pub pos: Pos,
+    pub in_building: bool,
     pub ty: EntityType,
 }
 

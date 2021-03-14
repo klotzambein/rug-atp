@@ -27,15 +27,10 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(width: usize, height: usize, agent_count: usize, rng: &mut impl Rng) -> World {
+    pub fn new(width: usize, height: usize, rng: &mut impl Rng) -> World {
         let biomes = BiomeMap::new();
 
-        let mut entities: Vec<_> = (0..agent_count)
-            .map(|_i| Entity {
-                pos: Pos(0, 0),
-                ty: EntityType::Agent(Agent::default()),
-            })
-            .collect();
+        let mut entities = Vec::new();
         let mut tiles_entity = vec![None; width * height];
         let tiles_type = (0..width * height)
             .map(|i| {
@@ -43,7 +38,11 @@ impl World {
                 let (tt, e) = biomes.get(pos, rng);
                 if let Some(mut e) = e {
                     e.initialize(pos, &mut entities);
-                    entities.push(Entity { pos, ty: e });
+                    entities.push(Entity {
+                        pos,
+                        in_building: false,
+                        ty: e,
+                    });
                     tiles_entity[i] = Some(EntityId::new(entities.len() - 1))
                 }
                 tt
@@ -136,17 +135,13 @@ impl World {
         &self.entities[id.as_index()]
     }
 
-    pub fn entity_at(&self, pos: Pos) -> Option<&Entity> {
-        let e = self.tiles_entity[self.idx(pos)]?;
-        Some(&self.entities[e.as_index()])
-    }
-
     pub fn step(&mut self) {
         for i in 0..self.entities.len() {
             let mut entity = self.entities[i].clone();
+            let id = EntityId::new(i);
             match &mut entity.ty {
                 EntityType::Agent(a) => {
-                    self.step_agent(a, &mut entity.pos, i);
+                    self.step_agent(a, &mut entity.pos, &mut entity.in_building, id);
                 }
                 EntityType::Resource(r) => {
                     self.step_resource(r, &mut entity.pos, i);
@@ -157,22 +152,40 @@ impl World {
         }
     }
 
-    fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, i: usize) {
-        if *pos == Pos(-1, -1) {
-            return;
-        }
+    fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, in_building: &mut bool, id: EntityId) {
         let current_tile_idx = self.idx(*pos);
-        match a.step(*pos, &self) {
+        match a.step(*in_building, *pos, &self) {
             AgentAction::Move(p) => {
+                assert!(!*in_building);
+                assert!(self.tile_is_walkable(p));
                 let idx = self.idx(p);
-                if self.tiles_entity[idx].is_none() {
-                    self.tiles_entity[current_tile_idx] = None;
-                    self.tiles_entity[idx] = Some(EntityId::new(i));
-                    *pos = p;
+                self.tiles_entity[current_tile_idx] = None;
+                self.tiles_entity[idx] = Some(id);
+                *pos = p;
+            }
+            AgentAction::Leave(p) => {
+                assert!(*in_building);
+                assert!(self.tile_is_walkable(p));
+                
+                // Modify agent entity
+                *in_building = false;
+                *pos = p;
+                
+                // Set destination tile entity
+                let idx = self.idx(p);
+                self.tiles_entity[idx] = Some(id);
+
+                // Modify building
+                let building_entity_id = self.tiles_entity[current_tile_idx].unwrap();
+                let building_entity = &mut self.entities[building_entity_id.as_index()];
+                if let EntityType::Building(b) = &mut building_entity.ty {
+                    b.agent_leave(id);
+                } else {
+                    panic!("Not a building");
                 }
             }
             AgentAction::None => {}
-            _ => unimplemented!(),
+            x => unimplemented!("{:?}", x),
         }
     }
 
@@ -216,6 +229,15 @@ impl World {
 
     pub fn tile_type(&self, p: Pos) -> TileType {
         self.tiles_type[self.idx(p)]
+    }
+
+    pub fn entity_at(&self, pos: Pos) -> Option<&Entity> {
+        let e = self.tiles_entity[self.idx(pos)]?;
+        Some(&self.entities[e.as_index()])
+    }
+
+    pub fn tile_is_walkable(&self, p: Pos) -> bool {
+        self.tile_type(p).walkable() && self.entity_at(p).is_none()
     }
 }
 
