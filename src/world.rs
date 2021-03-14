@@ -4,7 +4,7 @@ use rand::Rng;
 
 use crate::{
     entity::{
-        agent::{Agent, AgentAction, Job},
+        agent::{Agent, AgentAction},
         building::Building,
         resources::Resource,
     },
@@ -33,24 +33,20 @@ impl World {
         let mut entities: Vec<_> = (0..agent_count)
             .map(|_i| Entity {
                 pos: Pos(0, 0),
-                ty: EntityType::Agent(Agent {
-                    job: Job::Explorer,
-                    cash: 0,
-                    // saturation: 255,
-                    energy: 255,
-                }),
+                ty: EntityType::Agent(Agent::default()),
             })
             .collect();
         let mut tiles_entity = vec![None; width * height];
         let tiles_type = (0..width * height)
             .map(|i| {
                 let pos = Pos((i % width) as i16, (i / width) as i16);
-                let t = biomes.get(pos, rng);
-                if let Some(e) = t.1 {
+                let (tt, e) = biomes.get(pos, rng);
+                if let Some(mut e) = e {
+                    e.initialize(pos, &mut entities);
                     entities.push(Entity { pos, ty: e });
                     tiles_entity[i] = Some(EntityId::new(entities.len() - 1))
                 }
-                t.0
+                tt
             })
             .take(width * height)
             .collect::<Vec<_>>();
@@ -162,6 +158,9 @@ impl World {
     }
 
     fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, i: usize) {
+        if *pos == Pos(-1, -1) {
+            return;
+        }
         let current_tile_idx = self.idx(*pos);
         match a.step(*pos, &self) {
             AgentAction::Move(p) => {

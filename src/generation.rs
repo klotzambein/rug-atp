@@ -93,7 +93,7 @@ impl BiomeMap {
     }
 
     pub fn get(&self, p: Pos, rng: &mut impl Rng) -> (TileType, Option<EntityType>) {
-        let pos = [p.0 as f64 /  5., p.1 as f64 / 5.];
+        let pos = [p.0 as f64 / 5., p.1 as f64 / 5.];
         let elevation = (self.elevation.iter().map(|e| e.get(pos)).sum::<f64>() * 500.) as isize;
         let climate = (self.climate.iter().map(|e| e.get(pos)).sum::<f64>() * 500.) as isize;
         let b = self
@@ -119,7 +119,7 @@ impl TileDistribution {
                 (TileType::GrassRock, None),
                 (
                     TileType::Grass,
-                    Some(EntityType::Building(Building::Hut)),
+                    Some(EntityType::Building(Building::hut_uninitialized())),
                 ),
                 (
                     TileType::Grass,
@@ -136,7 +136,7 @@ impl TileDistribution {
                 (TileType::Dirt, None),
                 (TileType::DirtRock, None),
                 (TileType::DirtTreeDead, None),
-                (TileType::Dirt, Some(EntityType::Building(Building::Hut))),
+                (TileType::Dirt, Some(EntityType::Building(Building::hut_uninitialized()))),
             ],
             weights: WeightedIndex::new(&[2000, 20, 10, 1]).unwrap(),
         }
@@ -154,10 +154,7 @@ impl TileDistribution {
                 (TileType::Sand, None),
                 (TileType::SandRock, None),
                 (TileType::SandTreeDead, None),
-                (
-                    TileType::Sand,
-                    Some(EntityType::Building(Building::Market)),
-                ),
+                (TileType::Sand, Some(EntityType::Building(Building::Market))),
             ],
             weights: WeightedIndex::new(&[1000, 10, 15, 2]).unwrap(),
         }

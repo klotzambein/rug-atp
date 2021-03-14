@@ -1,14 +1,18 @@
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 
-use crate::{
-    tile::TileType,
-    world::{Pos, World},
-};
+use crate::world::{Pos, World};
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Default, Clone, Hash)]
 pub struct Agent {
     pub job: Job,
-    // pub saturation: u8,
+    pub nutrition_wheat: u8,
+    pub nutrition_berry: u8,
+    pub nutrition_meat: u8,
+    pub nutrition_fish: u8,
+    pub inventory_wheat: u8,
+    pub inventory_berry: u8,
+    pub inventory_meat: u8,
+    pub inventory_fish: u8,
     pub energy: u8,
     pub cash: u32,
 }
@@ -18,8 +22,7 @@ impl Agent {
         self.energy = self.energy.wrapping_sub(1);
         match self.job {
             Job::None => AgentAction::None,
-            Job::CompanyMember(_) => AgentAction::None,
-            Job::Miner => {
+            Job::Lumberer => {
                 let pos = world.find_tile_around(pos, 25, |p| match world.entity_at(p) {
                     Some(e) => match e.ty {
                         super::EntityType::Agent(_) => false,
@@ -45,6 +48,7 @@ impl Agent {
                 }
             }
             Job::Fisher => AgentAction::None,
+            Job::Butcher => AgentAction::None,
         }
     }
 }
@@ -66,12 +70,13 @@ type CompanyId = u8;
 #[derive(Debug, Clone, Hash)]
 pub enum Job {
     None,
-    CompanyMember(CompanyId),
-    Miner,
-    Farmer,
     Explorer,
+    Farmer,
+    Lumberer,
     Fisher,
-    // Butcher,
+    Butcher,
+    // Miner,
+    // CompanyMember(CompanyId),
     // Builder,
 }
 
@@ -79,12 +84,20 @@ impl Job {
     pub fn texture(&self) -> i32 {
         match self {
             Job::None => 0,
-            Job::CompanyMember(c) => *c as i32 + 8,
-            Job::Miner => 2,
-            Job::Farmer => 3,
-            Job::Explorer => 4,
-            Job::Fisher => 5,
+            // Job::CompanyMember(c) => *c as i32 + 8,
+            // Job::Miner => 2,
+            Job::Farmer => 10,
+            Job::Explorer => 11,
+            Job::Fisher => 12,
+            Job::Butcher => 13,
+            Job::Lumberer => 15,
         }
+    }
+}
+
+impl Default for Job {
+    fn default() -> Self {
+        Job::Explorer
     }
 }
 

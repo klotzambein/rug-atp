@@ -20,6 +20,14 @@ impl EntityId {
         EntityId(NonZeroU32::new((idx + 1) as u32).expect("Agent ID overflow"))
     }
 
+    pub fn uninitialized() -> EntityId {
+        EntityId(NonZeroU32::new(u32::MAX).expect("unreachable"))
+    }
+
+    pub fn is_uninitialized(self) -> bool {
+        self.0.get() == u32::MAX
+    }
+
     pub fn as_index(self) -> usize {
         self.0.get() as usize - 1
     }
@@ -44,7 +52,7 @@ impl Entity {
         match &self.ty {
             EntityType::Agent(a) => a.job.texture(),
             EntityType::Building(Building::Market) => 56,
-            EntityType::Building(Building::Hut) => 57,
+            EntityType::Building(Building::Hut { .. }) => 57,
             _ => unimplemented!(),
         }
     }
@@ -55,4 +63,13 @@ pub enum EntityType {
     Agent(Agent),
     Resource(Resource),
     Building(Building),
+}
+
+impl EntityType {
+    pub fn initialize(&mut self, pos: Pos, entities: &mut Vec<Entity>) {
+        match self {
+            EntityType::Building(b) => b.initialize(pos, entities),
+            _ => {}
+        }
+    }
 }
