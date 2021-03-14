@@ -54,6 +54,9 @@ impl Entity {
             EntityType::Agent(a) => a.job.texture(),
             EntityType::Building(Building::Market) => 56,
             EntityType::Building(Building::Hut { .. }) => 57,
+            // TODO IVO: Add the texture indices here. This refers to a texture
+            // in assets/characters.png. The indices start at the top left going
+            // to the right.
             EntityType::Resource(Resource::Berry(_)) => 33,
             _ => unimplemented!(),
         }
