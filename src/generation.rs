@@ -93,7 +93,7 @@ impl BiomeMap {
     }
 
     pub fn get(&self, p: Pos, rng: &mut impl Rng) -> (TileType, Option<EntityType>) {
-        let pos = [p.0 as f64 / 5., p.1 as f64 / 5.];
+        let pos = [p.x as f64 / 5., p.y as f64 / 5.];
         let elevation = (self.elevation.iter().map(|e| e.get(pos)).sum::<f64>() * 500.) as isize;
         let climate = (self.climate.iter().map(|e| e.get(pos)).sum::<f64>() * 500.) as isize;
         let b = self
@@ -130,9 +130,17 @@ impl TileDistribution {
                     TileType::Grass,
                     Some(EntityType::Resource(Resource::Berry(255))),
                 ),
+                (
+                    TileType::Grass,
+                    Some(EntityType::Resource(Resource::Wheat(255))),
+                ),
+                (
+                    TileType::Grass,
+                    Some(EntityType::Resource(Resource::Meat(255))),
+                ),
             ],
             // TODO IVO: Don't forget to update the weights
-            weights: WeightedIndex::new(&[5000, 200, 30, 10, 30]).unwrap(),
+            weights: WeightedIndex::new(&[5000, 200, 30, 10, 30, 30, 30]).unwrap(),
         }
     }
 
@@ -153,8 +161,15 @@ impl TileDistribution {
 
     pub fn ocean() -> TileDistribution {
         TileDistribution {
-            tiles: vec![(TileType::Water, None), (TileType::WaterRock, None)],
-            weights: WeightedIndex::new(&[1000, 1]).unwrap(),
+            tiles: vec![
+                (TileType::Water, None),
+                (TileType::WaterRock, None),
+                (
+                    TileType::Water,
+                    Some(EntityType::Resource(Resource::Fish(255))),
+                ),
+            ],
+            weights: WeightedIndex::new(&[1000, 1, 20]).unwrap(),
         }
     }
     pub fn desert() -> TileDistribution {
@@ -174,8 +189,12 @@ impl TileDistribution {
                 (TileType::Sand, None),
                 (TileType::SandPalm, None),
                 (TileType::SandTreeDead, None),
+                (
+                    TileType::Sand,
+                    Some(EntityType::Building(Building::Boat { agent: None })),
+                ),
             ],
-            weights: WeightedIndex::new(&[1000, 20, 5]).unwrap(),
+            weights: WeightedIndex::new(&[1000, 20, 5, 15]).unwrap(),
         }
     }
 }

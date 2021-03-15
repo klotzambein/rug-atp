@@ -44,7 +44,7 @@ fn main() {
                 && (tile_x >= 0)
                 && (tile_y >= 0)
             {
-                let pos = Pos(tile_x, tile_y);
+                let pos = Pos::new(tile_x, tile_y);
                 let current_tile_idx = world.idx(pos);
                 println!("Corresponding tile: {:?}", current_tile_idx);
                 // TODO: Get tile and entity

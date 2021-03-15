@@ -11,3 +11,34 @@ pub enum Resource {
     Fish(u8),
     Meat(u8),
 }
+
+#[derive(Debug, Clone, Copy, Hash)]
+pub enum ResourceItem {
+    Wheat(u8),
+    Berry(u8),
+    Fish(u8),
+    Meat(u8),
+}
+
+impl Resource {
+    pub fn farm(&mut self) -> ResourceItem {
+        match self {
+            Resource::Wheat(amount) => {
+                *amount = amount.saturating_sub(1);
+                ResourceItem::Wheat(1)
+            }
+            Resource::Berry(amount) => {
+                *amount = amount.saturating_sub(1);
+                ResourceItem::Berry(1)
+            }
+            Resource::Fish(amount) => {
+                *amount = amount.saturating_sub(1);
+                ResourceItem::Fish(1)
+            }
+            Resource::Meat(amount) => {
+                *amount = amount.saturating_sub(1);
+                ResourceItem::Meat(1)
+            }
+        }
+    }
+}

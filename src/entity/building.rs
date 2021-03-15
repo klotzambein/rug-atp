@@ -6,6 +6,7 @@ use super::{agent::Agent, Entity, EntityId, EntityType};
 pub enum Building {
     Market,
     Hut { is_agent_in: bool, agent: EntityId },
+    Boat { agent: Option<EntityId> },
 }
 
 impl Building {
@@ -33,11 +34,28 @@ impl Building {
         }
     }
 
+    pub fn agent_enter(&mut self, id: EntityId) {
+        match self {
+            Building::Market => {}
+            Building::Hut { is_agent_in, agent } => {
+                assert_eq!(*agent, id);
+                *is_agent_in = true;
+            }
+            Building::Boat { agent } => {
+                assert!(agent.is_none());
+                *agent = Some(id);
+            }
+        }
+    }
+
     pub fn agent_leave(&mut self, _id: EntityId) {
         match self {
             Building::Market => {}
             Building::Hut { is_agent_in, .. } => {
                 *is_agent_in = false;
+            }
+            Building::Boat { agent } => {
+                *agent = None;
             }
         }
     }

@@ -54,11 +54,16 @@ impl Entity {
             EntityType::Agent(a) => a.job.texture(),
             EntityType::Building(Building::Market) => 56,
             EntityType::Building(Building::Hut { .. }) => 57,
+            EntityType::Building(Building::Boat { agent: None }) => 49,
+            EntityType::Building(Building::Boat { agent: Some(_) }) => 51,
             // TODO IVO: Add the texture indices here. This refers to a texture
             // in assets/characters.png. The indices start at the top left going
             // to the right.
+            EntityType::Resource(Resource::Wheat(_)) => 32,
             EntityType::Resource(Resource::Berry(_)) => 33,
-            _ => unimplemented!(),
+            EntityType::Resource(Resource::Meat(_)) => 40,
+            EntityType::Resource(Resource::Fish(_)) => 50,
+            // _ => unimplemented!(),
         }
     }
 }

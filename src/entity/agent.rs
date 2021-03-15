@@ -1,6 +1,18 @@
-use rand::{distributions::Standard, prelude::Distribution, Rng};
+use std::cmp::Ordering;
+
+use rand::{
+    distributions::{Bernoulli, Standard},
+    prelude::*,
+    Rng,
+};
 
 use crate::world::{Pos, World};
+
+use super::{
+    building::Building,
+    resources::{Resource, ResourceItem},
+    EntityType,
+};
 
 #[derive(Debug, Default, Clone, Hash)]
 pub struct Agent {
@@ -15,6 +27,8 @@ pub struct Agent {
     pub inventory_fish: u8,
     pub energy: u8,
     pub cash: u32,
+    pub target_pos: Option<Pos>,
+    pub curr_dir: Option<Direction>,
 }
 
 impl Agent {
@@ -28,21 +42,46 @@ impl Agent {
         }
 
         self.energy = self.energy.wrapping_sub(1);
+
+        // if (self.energy <= 0) {
+
+        // }
         match self.job {
             Job::None => AgentAction::None,
             Job::Lumberer => {
-                let _pos = world.find_tile_around(pos, 25, |p| match world.entity_at(p) {
-                    Some(e) => match e.ty {
-                        super::EntityType::Agent(_) => false,
-                        super::EntityType::Resource(_) => true,
-                        super::EntityType::Building(_) => false,
-                    },
-                    None => false,
+                let target_pos = world.find_entity_around(pos, 15 * 15, |e| {
+                    matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
                 });
-                AgentAction::None
+
+                let pf = self.path_find(pos, target_pos, world);
+
+                match pf {
+                    Ok(target) => AgentAction::Farm(target),
+                    Err(Some(pos)) => AgentAction::Move(pos),
+                    Err(None) => AgentAction::None,
+                }
             }
             Job::Farmer => AgentAction::None,
+            // Job::Farmer => FindAndFarm(Resource::Wheat(_))
             Job::Explorer => {
+                // world.find_entity_around(pos, 15 * 15, |e| {
+                //     matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
+                // });
+
+                // world.find_entity_around(pos, 15 * 15, |e| {
+                //     matches!(e.ty, EntityType::Resource(Resource::Wheat(_)))
+                // });
+
+                // world.find_entity_around(pos, 15 * 15, |e| {
+                //     matches!(e.ty, EntityType::Resource(Resource::Meat(_)))
+                // });
+
+                // world.find_entity_around(pos, 15 * 15, |e| {
+                //     matches!(e.ty, EntityType::Building(Building::Boat { agent: None }))
+                // });
+
+                // else
+
                 let dir: Direction = rand::random();
 
                 let target = (pos + dir).wrap(world);
@@ -53,8 +92,62 @@ impl Agent {
                     AgentAction::None
                 }
             }
-            Job::Fisher => AgentAction::None,
+            Job::Fisher => {
+                // First find a boat
+                let target_pos = world.find_entity_around(pos, 5 * 5, |e| {
+                    matches!(e.ty, EntityType::Building(Building::Boat { agent: None }))
+                });
+
+                // if let Some
+
+                AgentAction::None
+            }
             Job::Butcher => AgentAction::None,
+            // Job::Butcher => FindAndFarm(Resource::Meat(_))
+        }
+    }
+
+    pub fn collect(&mut self, resource: ResourceItem) {
+        match resource {
+            ResourceItem::Wheat(n) => self.inventory_wheat += n,
+            ResourceItem::Berry(n) => self.inventory_berry += n,
+            ResourceItem::Fish(n) => self.inventory_fish += n,
+            ResourceItem::Meat(n) => self.inventory_meat += n,
+        }
+    }
+
+    pub fn path_find(
+        &mut self,
+        pos: Pos,
+        target: Option<Pos>,
+        world: &World,
+    ) -> Result<Pos, Option<Pos>> {
+        let mut rng = rand::thread_rng();
+        let unstuckifier = Bernoulli::new(0.75).unwrap();
+
+        if let Some(target) = target {
+            if target.is_adjacent(pos) {
+                return Ok(target);
+            }
+            if unstuckifier.sample(&mut rng) {
+                let move_dir = Direction::delta(pos, target);
+                let next_pos = pos + move_dir;
+                if world.tile_is_walkable(next_pos) {
+                    return Err(Some(next_pos));
+                }
+            }
+        }
+
+        let next = world
+            .neighbors(pos)
+            .iter()
+            .cloned()
+            .filter(|p| world.tile_is_walkable(*p))
+            .choose(&mut rng);
+
+        match next {
+            Some(n) => Err(Some(n)),
+            None => Err(None),
         }
     }
 }
@@ -103,7 +196,7 @@ impl Job {
 
 impl Default for Job {
     fn default() -> Self {
-        Job::Explorer
+        Job::Lumberer
     }
 }
 
@@ -119,19 +212,38 @@ pub enum Direction {
     UpLeft,
 }
 
+impl Direction {
+    pub fn delta(end: Pos, start: Pos) -> Direction {
+        let dx = start.x.cmp(&end.x);
+        let dy = start.y.cmp(&end.y);
+
+        match (dx, dy) {
+            (Ordering::Less, Ordering::Less) => Direction::DownLeft,
+            (Ordering::Less, Ordering::Equal) => Direction::Left,
+            (Ordering::Less, Ordering::Greater) => Direction::UpLeft,
+            (Ordering::Equal, Ordering::Less) => Direction::Down,
+            (Ordering::Equal, Ordering::Equal) => unimplemented!(),
+            (Ordering::Equal, Ordering::Greater) => Direction::Up,
+            (Ordering::Greater, Ordering::Less) => Direction::DownRight,
+            (Ordering::Greater, Ordering::Equal) => Direction::Right,
+            (Ordering::Greater, Ordering::Greater) => Direction::UpRight,
+        }
+    }
+}
+
 impl std::ops::Add<Direction> for Pos {
     type Output = Pos;
 
     fn add(self, rhs: Direction) -> Self::Output {
         match rhs {
-            Direction::Up => Pos(self.0, self.1 + 1),
-            Direction::UpRight => Pos(self.0 + 1, self.1 + 1),
-            Direction::Right => Pos(self.0 + 1, self.1),
-            Direction::DownRight => Pos(self.0 + 1, self.1 - 1),
-            Direction::Down => Pos(self.0, self.1 - 1),
-            Direction::DownLeft => Pos(self.0 - 1, self.1 - 1),
-            Direction::Left => Pos(self.0 - 1, self.1),
-            Direction::UpLeft => Pos(self.0 - 1, self.1 + 1),
+            Direction::Up => Pos::new(self.x, self.y + 1),
+            Direction::UpRight => Pos::new(self.x + 1, self.y + 1),
+            Direction::Right => Pos::new(self.x + 1, self.y),
+            Direction::DownRight => Pos::new(self.x + 1, self.y - 1),
+            Direction::Down => Pos::new(self.x, self.y - 1),
+            Direction::DownLeft => Pos::new(self.x - 1, self.y - 1),
+            Direction::Left => Pos::new(self.x - 1, self.y),
+            Direction::UpLeft => Pos::new(self.x - 1, self.y + 1),
         }
     }
 }
