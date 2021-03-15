@@ -24,10 +24,14 @@ impl Building {
                 agent,
             } if agent.is_uninitialized() => {
                 *agent = EntityId::new(entities.len());
+                let mut a = Agent::default();
+                a.job = rand::random();
+                a.cash = 200;
+
                 entities.push(Entity {
                     pos,
                     in_building: true,
-                    ty: EntityType::Agent(Agent::default()),
+                    ty: EntityType::Agent(a),
                 })
             }
             _ => {}

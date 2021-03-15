@@ -9,6 +9,7 @@ pub mod grid;
 pub mod tile;
 pub mod ui;
 pub mod world;
+pub mod market;
 
 use grid::CanvasGrid;
 use ui::UI;

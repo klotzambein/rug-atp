@@ -8,11 +8,7 @@ use rand::{
 
 use crate::world::{Pos, World};
 
-use super::{
-    building::Building,
-    resources::{Resource, ResourceItem},
-    EntityType,
-};
+use super::{EntityType, building::Building, resources::{PerResource, Resource, ResourceItem}};
 
 #[derive(Debug, Default, Clone, Hash)]
 pub struct Agent {
@@ -27,8 +23,7 @@ pub struct Agent {
     pub inventory_fish: u8,
     pub energy: u8,
     pub cash: u32,
-    pub target_pos: Option<Pos>,
-    pub curr_dir: Option<Direction>,
+    pub in_boat: bool,
 }
 
 impl Agent {
@@ -46,41 +41,68 @@ impl Agent {
         // if (self.energy <= 0) {
 
         // }
-        match self.job {
+        match &mut self.job {
             Job::None => AgentAction::None,
-            Job::Lumberer => {
-                let target_pos = world.find_entity_around(pos, 15 * 15, |e| {
-                    matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
+            Job::Lumberer => self.find_and_farm(world, pos, ResourceItem::Berry),
+            Job::Farmer => self.find_and_farm(world, pos, ResourceItem::Wheat),
+            Job::Butcher => self.find_and_farm(world, pos, ResourceItem::Meat),
+            // Job::FisherBoat => self.find_and_farm(world, pos, ResourceItem::Fish),
+            Job::Fisher => {
+                // First find a boat and enter it
+                // if !self.in_boat {
+                //     let next_action = self.find_and_farm(
+                //         world,
+                //         pos,
+                //         EntityType::Building(Building::Boat { agent: None }),
+                //     );
+                //     match next_action {
+                //         AgentAction::Enter(_) => {
+                //             self.job = Job::FisherBoat;
+                //             self.in_boat = true;
+                //             // find closest water tile
+                //             // move to water: idk how??
+                //             // only move on water now
+
+                //             return next_action;
+                //         }
+                //     }
+                // }
+                AgentAction::None
+            }
+            Job::Explorer {
+                observations,
+                count,
+            } => {
+                world.find_entity_around(pos, 15 * 15, |e| {
+                    // matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
+                    match e.ty {
+                        EntityType::Resource(Resource::Berry(n)) => observations.berry += n as u16,
+                        EntityType::Resource(Resource::Wheat(n)) => observations.wheat += n as u16,
+                        EntityType::Resource(Resource::Meat(n)) => observations.meat += n as u16,
+                        EntityType::Building(Building::Boat { .. }) => observations.fish += 30,
+                        _ => (),
+                    }
+                    false
                 });
 
-                let pf = self.path_find(pos, target_pos, world);
+                *count += 1;
+                if *count == 200 {
+                    let mut max_freq: u16 = 0;
+                    let mut best_item: ResourceItem = ResourceItem::Berry;
+                    for (resource, observation) in observations.iter() {
+                        if observation > max_freq {
+                            max_freq = observation;
+                            best_item = resource;
+                        }
+                    }
 
-                match pf {
-                    Ok(target) => AgentAction::Farm(target),
-                    Err(Some(pos)) => AgentAction::Move(pos),
-                    Err(None) => AgentAction::None,
+                    match best_item {
+                        ResourceItem::Berry => self.job = Job::Lumberer,
+                        ResourceItem::Wheat => self.job = Job::Farmer,
+                        ResourceItem::Fish => self.job = Job::Fisher,
+                        ResourceItem::Meat => self.job = Job::Butcher,
+                    }
                 }
-            }
-            Job::Farmer => AgentAction::None,
-            // Job::Farmer => FindAndFarm(Resource::Wheat(_))
-            Job::Explorer => {
-                // world.find_entity_around(pos, 15 * 15, |e| {
-                //     matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
-                // });
-
-                // world.find_entity_around(pos, 15 * 15, |e| {
-                //     matches!(e.ty, EntityType::Resource(Resource::Wheat(_)))
-                // });
-
-                // world.find_entity_around(pos, 15 * 15, |e| {
-                //     matches!(e.ty, EntityType::Resource(Resource::Meat(_)))
-                // });
-
-                // world.find_entity_around(pos, 15 * 15, |e| {
-                //     matches!(e.ty, EntityType::Building(Building::Boat { agent: None }))
-                // });
-
-                // else
 
                 let dir: Direction = rand::random();
 
@@ -92,27 +114,35 @@ impl Agent {
                     AgentAction::None
                 }
             }
-            Job::Fisher => {
-                // First find a boat
-                let target_pos = world.find_entity_around(pos, 5 * 5, |e| {
-                    matches!(e.ty, EntityType::Building(Building::Boat { agent: None }))
-                });
-
-                // if let Some
-
-                AgentAction::None
-            }
-            Job::Butcher => AgentAction::None,
-            // Job::Butcher => FindAndFarm(Resource::Meat(_))
         }
     }
 
     pub fn collect(&mut self, resource: ResourceItem) {
         match resource {
-            ResourceItem::Wheat(n) => self.inventory_wheat += n,
-            ResourceItem::Berry(n) => self.inventory_berry += n,
-            ResourceItem::Fish(n) => self.inventory_fish += n,
-            ResourceItem::Meat(n) => self.inventory_meat += n,
+            ResourceItem::Wheat => self.inventory_wheat += 1,
+            ResourceItem::Berry => self.inventory_berry += 1,
+            ResourceItem::Fish => self.inventory_fish += 1,
+            ResourceItem::Meat => self.inventory_meat += 1,
+        }
+    }
+
+    pub fn find_and_farm(&mut self, world: &World, pos: Pos, item: ResourceItem) -> AgentAction {
+        let search_radius = 15;
+
+        let target_pos = world.find_entity_around(pos, search_radius * search_radius, |e| {
+            if let EntityType::Resource(r) = &e.ty {
+                r.produces_item(item)
+            } else {
+                false
+            }
+        });
+
+        let pf = self.path_find(pos, target_pos, world);
+
+        match pf {
+            Ok(target) => AgentAction::Farm(target),
+            Err(Some(pos)) => AgentAction::Move(pos),
+            Err(None) => AgentAction::None,
         }
     }
 
@@ -164,15 +194,29 @@ pub enum AgentAction {
     Enter(Pos),
     /// Leave a building and go to pos
     Leave(Pos),
+    /// This is only valid if an agent is in a market. This action will create
+    /// an order at the given price with the specified amount
+    MarketOrder {
+        item: ResourceItem,
+        price: u16,
+        amount: u16,
+    },
+    /// This is only valid if an agent is in a market. This action will purchase
+    /// the given item at the cheapest market price.
+    MarketPurchase { item: ResourceItem, amount: u16 },
 }
 
 #[derive(Debug, Clone, Hash)]
 pub enum Job {
     None,
-    Explorer,
+    Explorer {
+        count: u8,
+        observations: PerResource<u16>,
+    },
     Farmer,
     Lumberer,
     Fisher,
+    // FisherBoat,
     Butcher,
     // Miner,
     // CompanyMember(CompanyId),
@@ -186,8 +230,9 @@ impl Job {
             // Job::CompanyMember(c) => *c as i32 + 8,
             // Job::Miner => 2,
             Job::Farmer => 10,
-            Job::Explorer => 11,
+            Job::Explorer { .. } => 11,
             Job::Fisher => 12,
+            // Job::FisherBoat => 51,
             Job::Butcher => 13,
             Job::Lumberer => 15,
         }
@@ -197,6 +242,22 @@ impl Job {
 impl Default for Job {
     fn default() -> Self {
         Job::Lumberer
+    }
+}
+
+impl Distribution<Job> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Job {
+        match rng.gen_range(0..5) {
+            0 => Job::Explorer {
+                observations: Default::default(),
+                count: 0,
+            },
+            1 => Job::Farmer,
+            2 => Job::Butcher,
+            3 => Job::Fisher,
+            4 => Job::Lumberer,
+            _ => unreachable!(),
+        }
     }
 }
 

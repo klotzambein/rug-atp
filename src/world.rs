@@ -11,6 +11,7 @@ use crate::{
     entity::{Entity, EntityId, EntityType},
     generation::BiomeMap,
     grid::CanvasGrid,
+    market::Market,
     tile::TileType,
 };
 
@@ -20,6 +21,7 @@ pub struct World {
     // tiles_resource: Vec<u8>,
     // tiles_action: Vec<TileAction>,
     entities: Vec<Entity>,
+    market: Market,
     // conflicts: Vec<Vec<TileAction>>,
     pub width: usize,
     pub height: usize,
@@ -58,6 +60,7 @@ impl World {
             // tiles_resource: vec![0; width * height],
             // tiles_action: vec![TileAction::default(); width * height],
             entities,
+            market: Market::default(),
             // conflicts: Vec::new(),
             width,
             height,
@@ -238,6 +241,8 @@ impl World {
                 // Modify agent entity
                 a.collect(resource_farmed)
             }
+            AgentAction::MarketOrder { item, price, amount } => {}
+            AgentAction::MarketPurchase { item, amount } => {}
             AgentAction::None => {}
             x => unimplemented!("{:?}", x),
         }
