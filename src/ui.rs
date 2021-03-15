@@ -24,7 +24,7 @@ impl UI {
         }
     }
 
-    pub fn draw(&mut self, last_frame: Instant, target: &mut impl Surface, world: &World) {
+    pub fn draw(&mut self, last_frame: Instant, target: &mut impl Surface, world: &mut World) {
         let imgui = self.imgui.clone();
         let mut imgui = imgui.borrow_mut();
         let imgui = &mut *imgui;
@@ -43,6 +43,7 @@ impl UI {
         // Here goes the code that describes the GUI
         ui.show_demo_window(&mut true);
         self.window_inspector(&ui, world);
+        self.window_stepper(&ui, world);
 
         imgui.platform.prepare_render(&ui, &window);
         let draw_data = ui.render();
@@ -50,6 +51,17 @@ impl UI {
             .renderer
             .render(target, draw_data)
             .expect("Rendering failed");
+    }
+
+    fn window_stepper(&self, ui: &Ui, world: &mut World) {
+        Window::new(im_str!("Stepper"))
+            .size([200., 100.], Condition::Once)
+            .build(ui, || {
+                ui.checkbox(im_str!("Run"), &mut world.is_running);
+                if ui.button(im_str!("Step"), [100., 30.]) {
+                    world.step_once();
+                }
+            });
     }
 
     fn window_inspector(&self, ui: &Ui, world: &World) {

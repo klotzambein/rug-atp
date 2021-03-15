@@ -59,7 +59,7 @@ fn main() {
         })
     });
 
-    const PRE_RUN_STEPS: usize = 0;//50_000;
+    const PRE_RUN_STEPS: usize = 0; //50_000;
     for i in 0..PRE_RUN_STEPS {
         if i % 1000 == 0 {
             println!("{}%", i as f32 / PRE_RUN_STEPS as f32 * 100.);
@@ -73,12 +73,12 @@ fn main() {
 
         app.canvas.draw(target, &grid, &()).unwrap();
         ui.borrow_mut()
-            .draw(last_frame, target, &world.borrow_mut());
+            .draw(last_frame, target, &mut world.borrow_mut());
 
         if i == 0 {
             world.borrow_mut().step();
         }
-        i = (i + 1) % 50;
+        i = (i + 1) % 10;
         world.borrow_mut().update_grid(&app.display, &mut grid);
     });
 }
