@@ -34,12 +34,25 @@ impl Resource {
         }
     }
 
-    pub fn produces_item(&self, item: ResourceItem) -> bool {
+    pub fn product(&self) -> ResourceItem {
         match self {
-            Resource::Wheat(_) => item == ResourceItem::Wheat,
-            Resource::Berry(_) => item == ResourceItem::Berry,
-            Resource::Fish(_) => item == ResourceItem::Fish,
-            Resource::Meat(_) => item == ResourceItem::Meat,
+            Resource::Wheat(_) => ResourceItem::Wheat,
+            Resource::Berry(_) => ResourceItem::Berry,
+            Resource::Fish(_) => ResourceItem::Fish,
+            Resource::Meat(_) => ResourceItem::Meat,
+        }
+    }
+
+    pub fn produces_item(&self, item: ResourceItem) -> bool {
+        self.product() == item
+    }
+
+    pub fn available(&self) -> u8 {
+        match self {
+            Resource::Wheat(n) => *n,
+            Resource::Berry(n) => *n,
+            Resource::Fish(n) => *n,
+            Resource::Meat(n) => *n,
         }
     }
 }
@@ -60,15 +73,44 @@ pub struct PerResource<T> {
     pub meat: T,
 }
 
-impl<T: Clone> PerResource<T> {
-    pub fn iter(&self) -> impl Iterator<Item = (ResourceItem, T)> {
-        let s = self.clone();
-        (0..4).map(move |i| match i {
-            0 => (ResourceItem::Wheat, s.wheat.clone()),
-            1 => (ResourceItem::Berry, s.berry.clone()),
-            2 => (ResourceItem::Fish, s.fish.clone()),
-            3 => (ResourceItem::Meat, s.meat.clone()),
-            _ => unreachable!(),
-        })
+impl<T> PerResource<T> {
+    pub fn iter(&self) -> impl Iterator<Item = (ResourceItem, &T)> {
+        use std::iter::once;
+        once((ResourceItem::Wheat, &self.wheat))
+            .chain(once((ResourceItem::Berry, &self.berry)))
+            .chain(once((ResourceItem::Fish, &self.fish)))
+            .chain(once((ResourceItem::Meat, &self.meat)))
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (ResourceItem, &mut T)> + '_ {
+        use std::iter::once;
+        once((ResourceItem::Wheat, &mut self.wheat))
+            .chain(once((ResourceItem::Berry, &mut self.berry)))
+            .chain(once((ResourceItem::Fish, &mut self.fish)))
+            .chain(once((ResourceItem::Meat, &mut self.meat)))
+    }
+}
+
+impl<T> std::ops::Index<ResourceItem> for PerResource<T> {
+    type Output = T;
+
+    fn index(&self, index: ResourceItem) -> &Self::Output {
+        match index {
+            ResourceItem::Wheat => &self.wheat,
+            ResourceItem::Berry => &self.berry,
+            ResourceItem::Fish => &self.fish,
+            ResourceItem::Meat => &self.meat,
+        }
+    }
+}
+
+impl<T> std::ops::IndexMut<ResourceItem> for PerResource<T> {
+    fn index_mut(&mut self, index: ResourceItem) -> &mut Self::Output {
+        match index {
+            ResourceItem::Wheat => &mut self.wheat,
+            ResourceItem::Berry => &mut self.berry,
+            ResourceItem::Fish => &mut self.fish,
+            ResourceItem::Meat => &mut self.meat,
+        }
     }
 }

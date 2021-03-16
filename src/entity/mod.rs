@@ -36,7 +36,6 @@ impl EntityId {
 #[derive(Debug, Clone, Hash)]
 pub struct Entity {
     pub pos: Pos,
-    pub in_building: bool,
     pub ty: EntityType,
 }
 
@@ -64,6 +63,15 @@ impl Entity {
             EntityType::Resource(Resource::Meat(_)) => 40,
             EntityType::Resource(Resource::Fish(_)) => 50,
             // _ => unimplemented!(),
+        }
+    }
+
+    pub fn visible(&self) -> bool {
+        match self.ty {
+            EntityType::Agent(Agent {
+                in_building, dead, ..
+            }) => !(in_building || dead),
+            _ => true,
         }
     }
 }

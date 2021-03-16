@@ -8,27 +8,47 @@ use rand::{
 
 use crate::world::{Pos, World};
 
-use super::{EntityType, building::Building, resources::{PerResource, Resource, ResourceItem}};
+use super::{
+    building::Building,
+    resources::{PerResource, ResourceItem},
+    EntityType,
+};
 
 #[derive(Debug, Default, Clone, Hash)]
 pub struct Agent {
+    /// This contains the agents job, and all variables associated with said
+    /// job.
     pub job: Job,
-    pub nutrition_wheat: u8,
-    pub nutrition_berry: u8,
-    pub nutrition_meat: u8,
-    pub nutrition_fish: u8,
-    pub inventory_wheat: u8,
-    pub inventory_berry: u8,
-    pub inventory_meat: u8,
-    pub inventory_fish: u8,
-    pub energy: u8,
+    /// This contains the nutritional value of each food resource. This value
+    /// decreases when the food is eaten and increases when a different food is
+    /// eaten.
+    pub nutrition: PerResource<u8>,
+    /// This contains the amount of resources the agent possesses at the moment.
+    pub inventory: PerResource<u16>,
+    /// This is the agents current energy. This value is between 0 and 10_000
+    pub energy: u16,
+    /// This is the agents current cash. This can be used to buy resources at
+    /// the market.
     pub cash: u32,
-    pub in_boat: bool,
+    /// This is true when the agent is in a building. To check which building
+    /// the agent is in look up the current position in the world.
+    pub in_building: bool,
+    /// If this is true the agent is dead.
+    pub dead: bool,
 }
 
 impl Agent {
-    pub fn step(&mut self, in_building: bool, pos: Pos, world: &World) -> AgentAction {
-        if in_building {
+    pub fn step(&mut self, pos: Pos, world: &World) -> AgentAction {
+        if self.dead {
+            return AgentAction::None;
+        }
+
+        self.energy = self.energy.saturating_sub(1);
+        if self.energy == 0 {
+            return AgentAction::Die;
+        }
+
+        if self.in_building {
             if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
                 return AgentAction::Leave(p);
             } else {
@@ -36,11 +56,10 @@ impl Agent {
             }
         }
 
-        self.energy = self.energy.wrapping_sub(1);
+        self.do_job(pos, world)
+    }
 
-        // if (self.energy <= 0) {
-
-        // }
+    pub fn do_job(&mut self, pos: Pos, world: &World) -> AgentAction {
         match &mut self.job {
             Job::None => AgentAction::None,
             Job::Lumberer => self.find_and_farm(world, pos, ResourceItem::Berry),
@@ -75,10 +94,10 @@ impl Agent {
             } => {
                 world.find_entity_around(pos, 15 * 15, |e| {
                     // matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
-                    match e.ty {
-                        EntityType::Resource(Resource::Berry(n)) => observations.berry += n as u16,
-                        EntityType::Resource(Resource::Wheat(n)) => observations.wheat += n as u16,
-                        EntityType::Resource(Resource::Meat(n)) => observations.meat += n as u16,
+                    match &e.ty {
+                        EntityType::Resource(r) => {
+                            observations[r.product()] += r.available() as u16 / 10
+                        }
                         EntityType::Building(Building::Boat { .. }) => observations.fish += 30,
                         _ => (),
                     }
@@ -90,8 +109,8 @@ impl Agent {
                     let mut max_freq: u16 = 0;
                     let mut best_item: ResourceItem = ResourceItem::Berry;
                     for (resource, observation) in observations.iter() {
-                        if observation > max_freq {
-                            max_freq = observation;
+                        if *observation > max_freq {
+                            max_freq = *observation;
                             best_item = resource;
                         }
                     }
@@ -117,15 +136,7 @@ impl Agent {
         }
     }
 
-    pub fn collect(&mut self, resource: ResourceItem) {
-        match resource {
-            ResourceItem::Wheat => self.inventory_wheat += 1,
-            ResourceItem::Berry => self.inventory_berry += 1,
-            ResourceItem::Fish => self.inventory_fish += 1,
-            ResourceItem::Meat => self.inventory_meat += 1,
-        }
-    }
-
+    /// This function will return actions that lead to the agents locating a resource and farming it.
     pub fn find_and_farm(&mut self, world: &World, pos: Pos, item: ResourceItem) -> AgentAction {
         let search_radius = 15;
 
@@ -146,6 +157,13 @@ impl Agent {
         }
     }
 
+    /// This function makes the agent path find towards a given position. Should
+    /// no position be given the agent will walk around randomly.
+    ///
+    /// # Return value
+    /// - Ok(pos) => The agent is right next to the target pos
+    /// - Err(Some(pos)) => Move to the given pos next
+    /// - Err(None) => The agent can not move
     pub fn path_find(
         &mut self,
         pos: Pos,
@@ -180,6 +198,27 @@ impl Agent {
             None => Err(None),
         }
     }
+
+    /// This function will add the given resource to the agents inventory.
+    pub fn collect(&mut self, resource: ResourceItem) {
+        self.inventory[resource] += 1;
+    }
+
+    pub fn consume(&mut self, resource: ResourceItem) {
+        assert!(self.inventory[resource] > 0);
+        self.inventory[resource] -= 1;
+        self.energy += self.nutrition[resource] as u16;
+        if self.energy > 10000 {
+            self.energy = 10000;
+        }
+        for (r, n) in self.nutrition.iter_mut() {
+            if r == resource {
+                *n = n.saturating_sub(9);
+            } else {
+                *n = n.saturating_add(4);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Hash)]
@@ -204,6 +243,9 @@ pub enum AgentAction {
     /// This is only valid if an agent is in a market. This action will purchase
     /// the given item at the cheapest market price.
     MarketPurchase { item: ResourceItem, amount: u16 },
+    /// Die: remove this agent from this agent from the world and set its dead
+    /// flag to true.
+    Die,
 }
 
 #[derive(Debug, Clone, Hash)]
@@ -247,15 +289,15 @@ impl Default for Job {
 
 impl Distribution<Job> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Job {
-        match rng.gen_range(0..5) {
+        match rng.gen_range(0..4) {
             0 => Job::Explorer {
                 observations: Default::default(),
                 count: 0,
             },
             1 => Job::Farmer,
             2 => Job::Butcher,
-            3 => Job::Fisher,
-            4 => Job::Lumberer,
+            3 => Job::Lumberer,
+            // 4 => Job::Fisher,
             _ => unreachable!(),
         }
     }

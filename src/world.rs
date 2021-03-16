@@ -42,11 +42,7 @@ impl World {
                 let (tt, e) = biomes.get(pos, rng);
                 if let Some(mut e) = e {
                     e.initialize(pos, &mut entities);
-                    entities.push(Entity {
-                        pos,
-                        in_building: false,
-                        ty: e,
-                    });
+                    entities.push(Entity { pos, ty: e });
                     tiles_entity[i] = Some(EntityId::new(entities.len() - 1))
                 }
                 tt
@@ -163,7 +159,7 @@ impl World {
             let id = EntityId::new(i);
             match &mut entity.ty {
                 EntityType::Agent(a) => {
-                    self.step_agent(a, &mut entity.pos, &mut entity.in_building, id);
+                    self.step_agent(a, &mut entity.pos, id);
                 }
                 EntityType::Resource(r) => {
                     self.step_resource(r, &mut entity.pos, i);
@@ -175,11 +171,11 @@ impl World {
         self.tick += 1;
     }
 
-    fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, in_building: &mut bool, id: EntityId) {
+    fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, id: EntityId) {
         let current_tile_idx = self.idx(*pos);
-        match a.step(*in_building, *pos, &self) {
+        match a.step(*pos, &self) {
             AgentAction::Move(p) => {
-                assert!(!*in_building);
+                assert!(!a.in_building);
                 assert!(self.tile_is_walkable(p));
                 let idx = self.idx(p);
                 self.tiles_entity[current_tile_idx] = None;
@@ -187,11 +183,11 @@ impl World {
                 *pos = p;
             }
             AgentAction::Leave(p) => {
-                assert!(*in_building);
+                assert!(a.in_building);
                 assert!(self.tile_is_walkable(p));
 
                 // Modify agent entity
-                *in_building = false;
+                a.in_building = false;
                 *pos = p;
 
                 // Set destination tile entity
@@ -208,13 +204,13 @@ impl World {
                 }
             }
             AgentAction::Enter(p) => {
-                assert!(!*in_building);
+                assert!(!a.in_building);
 
                 // Clear source tile entity
                 self.tiles_entity[current_tile_idx] = None;
 
                 // Modify agent entity
-                *in_building = true;
+                a.in_building = true;
                 *pos = p;
 
                 // Modify building
@@ -241,9 +237,29 @@ impl World {
                 // Modify agent entity
                 a.collect(resource_farmed)
             }
-            AgentAction::MarketOrder { item, price, amount } => {}
+            AgentAction::MarketOrder {
+                item,
+                price,
+                amount,
+            } => {}
             AgentAction::MarketPurchase { item, amount } => {}
             AgentAction::None => {}
+            AgentAction::Die => {
+                if a.in_building {
+                    // Leave the building before the agent dies
+                    let building_entity_id = self.tiles_entity[current_tile_idx].unwrap();
+                    let building_entity = &mut self.entities[building_entity_id.as_index()];
+                    if let EntityType::Building(b) = &mut building_entity.ty {
+                        b.agent_leave(id);
+                    } else {
+                        panic!("Not a building");
+                    }
+                } else {
+                    self.tiles_entity[current_tile_idx] = None;
+                }
+                a.dead = true;
+                *pos = Pos::new(-1, -1);
+            }
             x => unimplemented!("{:?}", x),
         }
     }
@@ -279,11 +295,14 @@ impl World {
 
         grid.update_agents(
             display,
-            self.entities.iter().map(|a| Sprite {
-                vertex: Vf2::new(a.pos.x as f32 * 10., a.pos.y as f32 * 10.),
-                size: Vf2::new(10., 10.),
-                texture_index: a.texture(),
-            }),
+            self.entities
+                .iter()
+                .filter(|e| e.visible())
+                .map(|a| Sprite {
+                    vertex: Vf2::new(a.pos.x as f32 * 10., a.pos.y as f32 * 10.),
+                    size: Vf2::new(10., 10.),
+                    texture_index: a.texture(),
+                }),
         )
     }
 
@@ -298,6 +317,11 @@ impl World {
 
     pub fn tile_is_walkable(&self, p: Pos) -> bool {
         self.tile_type(p).walkable() && self.entity_at(p).is_none()
+    }
+
+    /// The days start at 0 and last 1000 ticks.
+    pub fn time_of_day(&self) -> u16 {
+        (self.tick % 1000) as u16
     }
 }
 
