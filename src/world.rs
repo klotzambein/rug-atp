@@ -256,7 +256,6 @@ impl World {
                 a.dead = true;
                 *pos = Pos::new(-1, -1);
             }
-            x => unimplemented!("{:?}", x),
         }
     }
 
