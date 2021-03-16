@@ -6,10 +6,10 @@ use glium::Surface;
 pub mod entity;
 pub mod generation;
 pub mod grid;
+pub mod market;
 pub mod tile;
 pub mod ui;
 pub mod world;
-pub mod market;
 
 use grid::CanvasGrid;
 use ui::UI;

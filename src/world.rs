@@ -237,12 +237,8 @@ impl World {
                 // Modify agent entity
                 a.collect(resource_farmed)
             }
-            AgentAction::MarketOrder {
-                item,
-                price,
-                amount,
-            } => {}
-            AgentAction::MarketPurchase { item, amount } => {}
+            AgentAction::MarketOrder { .. } => {}
+            AgentAction::MarketPurchase { .. } => {}
             AgentAction::None => {}
             AgentAction::Die => {
                 if a.in_building {
