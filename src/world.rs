@@ -320,7 +320,7 @@ impl World {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Pos {
     pub x: i16,
     pub y: i16,

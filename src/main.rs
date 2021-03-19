@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, time::Instant};
 
 use dear_gui::AppInit;
 use glium::Surface;
@@ -68,18 +68,30 @@ fn main() {
         world.borrow_mut().step();
     }
 
-    let mut i = 1;
+    let mut tps = 2.;
+    let mut seconds = 0.0;
     app.run(move |app, target, last_frame| {
+        if world.borrow_mut().is_running {
+            seconds += (Instant::now() - last_frame).as_secs_f32();
+        }
+
         target.clear_color_srgb(242. / 255., 206. / 255., 223. / 255., 1.);
 
         app.canvas.draw(target, &grid, &()).unwrap();
         ui.borrow_mut()
-            .draw(last_frame, target, &mut world.borrow_mut());
+            .draw(last_frame, target, &mut world.borrow_mut(), &mut tps);
 
-        if i == 0 {
+        let start_sim = Instant::now();
+        while seconds > 0. {
+            seconds -= 1. / tps;
             world.borrow_mut().step();
+            if (Instant::now() - start_sim).as_secs_f32() > 0.1 {
+                tps = 100f32.max(tps / 2.);
+                seconds = 0.0;
+                break;
+            }
         }
-        i = (i + 1) % 10;
+
         world.borrow_mut().update_grid(&app.display, &mut grid);
     });
 }

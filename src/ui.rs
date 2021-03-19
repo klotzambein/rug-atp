@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc, time::Instant};
 
 use dear_gui::event_handling::Imgui;
 use glium::Surface;
-use imgui::{im_str, Condition, Ui, Window};
+use imgui::{im_str, Condition, Slider, Ui, Window};
 
 use crate::{
     entity::EntityId,
@@ -24,7 +24,13 @@ impl UI {
         }
     }
 
-    pub fn draw(&mut self, last_frame: Instant, target: &mut impl Surface, world: &mut World) {
+    pub fn draw(
+        &mut self,
+        last_frame: Instant,
+        target: &mut impl Surface,
+        world: &mut World,
+        tps: &mut f32,
+    ) {
         let imgui = self.imgui.clone();
         let mut imgui = imgui.borrow_mut();
         let imgui = &mut *imgui;
@@ -43,7 +49,7 @@ impl UI {
         // Here goes the code that describes the GUI
         ui.show_demo_window(&mut true);
         self.window_inspector(&ui, world);
-        self.window_stepper(&ui, world);
+        self.window_stepper(&ui, world, tps);
 
         imgui.platform.prepare_render(&ui, &window);
         let draw_data = ui.render();
@@ -53,14 +59,18 @@ impl UI {
             .expect("Rendering failed");
     }
 
-    fn window_stepper(&self, ui: &Ui, world: &mut World) {
+    fn window_stepper(&self, ui: &Ui, world: &mut World, tps: &mut f32) {
         Window::new(im_str!("Stepper"))
-            .size([200., 100.], Condition::Once)
+            .size([200., 150.], Condition::Once)
+            .position([350., 100.], Condition::Once)
             .build(ui, || {
                 ui.checkbox(im_str!("Run"), &mut world.is_running);
                 if ui.button(im_str!("Step"), [100., 30.]) {
                     world.step_once();
                 }
+                Slider::new(im_str!("TPS"), 0.5..=1000.)
+                    .power(5.)
+                    .build(ui, tps);
             });
     }
 

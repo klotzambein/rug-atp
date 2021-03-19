@@ -25,10 +25,9 @@ impl Building {
             } if agent.is_uninitialized() => {
                 *agent = EntityId::new(entities.len());
                 let mut a = Agent::default();
-                a.job = rand::random();
-                a.energy = 5000;
-                a.cash = 200;
                 a.in_building = true;
+                a.state = super::agent::AgentState::BeHome;
+                a.home = pos;
 
                 entities.push(Entity {
                     pos,

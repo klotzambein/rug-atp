@@ -11,14 +11,18 @@ use crate::world::{Pos, World};
 use super::{
     building::Building,
     resources::{PerResource, ResourceItem},
-    EntityType,
+    Entity, EntityType,
 };
 
-#[derive(Debug, Default, Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct Agent {
     /// This contains the agents job, and all variables associated with said
     /// job.
     pub job: Job,
+    /// This is the position of this agents hut
+    pub home: Pos,
+    /// Every agent has there own internal state machine, this contains the state.
+    pub state: AgentState,
     /// This contains the nutritional value of each food resource. This value
     /// decreases when the food is eaten and increases when a different food is
     /// eaten.
@@ -48,20 +52,76 @@ impl Agent {
             return AgentAction::Die;
         }
 
-        if self.in_building {
-            if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
-                return AgentAction::Leave(p);
-            } else {
-                return AgentAction::None;
+        match self.state {
+            AgentState::GoHome => match self.path_find(pos, Some(self.home), world) {
+                Ok(h) => {
+                    self.state = AgentState::BeHome;
+                    AgentAction::Enter(h)
+                }
+                Err(a) => a,
+            },
+            AgentState::BeHome => {
+                if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
+                    // TODO: Make an informed choice
+                    if random() {
+                        self.state = AgentState::DoJob;
+                    } else {
+                        self.state = AgentState::GoToMarket(None);
+                    }
+                    AgentAction::Leave(p)
+                } else {
+                    AgentAction::None
+                }
+            }
+            AgentState::DoJob => {
+                if self.energy < 1000 {
+                    self.state = AgentState::GoHome;
+                }
+                self.do_job(pos, world)
+            }
+            AgentState::GoToMarket(mut m) => {
+                let action = self.find(world, pos, &mut m, |e| {
+                    matches!(e.ty, EntityType::Building(Building::Market))
+                });
+                // the value of m can be changed by self.find, so we set the
+                // state to the new value.
+                self.state = AgentState::GoToMarket(m);
+                match action {
+                    Ok(h) => {
+                        self.state = AgentState::TradeOnMarket;
+                        AgentAction::Enter(h)
+                    }
+                    Err(a) => a,
+                }
+            }
+            AgentState::TradeOnMarket => {
+                if self.energy < 1000 {
+                    if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
+                        // TODO: Maybe go straight to work
+                        self.state = AgentState::GoHome;
+                        AgentAction::Leave(p)
+                    } else {
+                        AgentAction::None
+                    }
+                } else {
+                    self.trade_on_market(pos, world)
+                }
             }
         }
 
-        self.do_job(pos, world)
+        // if self.in_building {
+        // if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
+        //     return AgentAction::Leave(p);
+        // } else {
+        //     return AgentAction::None;
+        // }
+        // }
+
+        // self.do_job(pos, world)
     }
 
     pub fn do_job(&mut self, pos: Pos, world: &World) -> AgentAction {
         match &mut self.job {
-            Job::None => AgentAction::None,
             Job::Lumberer => self.find_and_farm(world, pos, ResourceItem::Berry),
             Job::Farmer => self.find_and_farm(world, pos, ResourceItem::Wheat),
             Job::Butcher => self.find_and_farm(world, pos, ResourceItem::Meat),
@@ -136,6 +196,26 @@ impl Agent {
         }
     }
 
+    pub fn trade_on_market(&mut self, pos: Pos, world: &World) -> AgentAction {
+        AgentAction::None
+    }
+
+    pub fn find(
+        &mut self,
+        world: &World,
+        pos: Pos,
+        target: &mut Option<Pos>,
+        f: impl FnMut(&Entity) -> bool,
+    ) -> Result<Pos, AgentAction> {
+        let search_radius = 15;
+
+        if target.is_none() {
+            *target = world.find_entity_around(pos, search_radius * search_radius, f);
+        }
+
+        self.path_find(pos, *target, world)
+    }
+
     /// This function will return actions that lead to the agents locating a resource and farming it.
     pub fn find_and_farm(&mut self, world: &World, pos: Pos, item: ResourceItem) -> AgentAction {
         let search_radius = 15;
@@ -152,8 +232,7 @@ impl Agent {
 
         match pf {
             Ok(target) => AgentAction::Farm(target),
-            Err(Some(pos)) => AgentAction::Move(pos),
-            Err(None) => AgentAction::None,
+            Err(a) => a,
         }
     }
 
@@ -162,14 +241,14 @@ impl Agent {
     ///
     /// # Return value
     /// - Ok(pos) => The agent is right next to the target pos
-    /// - Err(Some(pos)) => Move to the given pos next
-    /// - Err(None) => The agent can not move
+    /// - Err(a) => a is either a move action, or if no move is possible a none
+    ///   action
     pub fn path_find(
         &mut self,
         pos: Pos,
         target: Option<Pos>,
         world: &World,
-    ) -> Result<Pos, Option<Pos>> {
+    ) -> Result<Pos, AgentAction> {
         let mut rng = rand::thread_rng();
         let unstuckifier = Bernoulli::new(0.75).unwrap();
 
@@ -178,10 +257,10 @@ impl Agent {
                 return Ok(target);
             }
             if unstuckifier.sample(&mut rng) {
-                let move_dir = Direction::delta(pos, target);
-                let next_pos = pos + move_dir;
+                let move_dir = Direction::delta(pos, target, world);
+                let next_pos = (pos + move_dir).wrap(world);
                 if world.tile_is_walkable(next_pos) {
-                    return Err(Some(next_pos));
+                    return Err(AgentAction::Move(next_pos));
                 }
             }
         }
@@ -194,8 +273,8 @@ impl Agent {
             .choose(&mut rng);
 
         match next {
-            Some(n) => Err(Some(n)),
-            None => Err(None),
+            Some(n) => Err(AgentAction::Move(n)),
+            None => Err(AgentAction::None),
         }
     }
 
@@ -219,6 +298,32 @@ impl Agent {
             }
         }
     }
+}
+
+impl Default for Agent {
+    fn default() -> Self {
+        Agent {
+            job: random(),
+            state: AgentState::DoJob,
+            home: Pos::default(),
+            nutrition: PerResource::default(),
+            inventory: PerResource::default(),
+            energy: 5000,
+            cash: 200,
+            in_building: false,
+            dead: false,
+        }
+    }
+}
+
+/// This keeps track of what the agent is currently doing.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum AgentState {
+    BeHome,
+    GoHome,
+    DoJob,
+    GoToMarket(Option<Pos>),
+    TradeOnMarket,
 }
 
 #[derive(Debug, Clone, Copy, Hash)]
@@ -250,7 +355,7 @@ pub enum AgentAction {
 
 #[derive(Debug, Clone, Hash)]
 pub enum Job {
-    None,
+    // None,
     Explorer {
         count: u8,
         observations: PerResource<u16>,
@@ -268,7 +373,6 @@ pub enum Job {
 impl Job {
     pub fn texture(&self) -> i32 {
         match self {
-            Job::None => 0,
             // Job::CompanyMember(c) => *c as i32 + 8,
             // Job::Miner => 2,
             Job::Farmer => 10,
@@ -316,10 +420,17 @@ pub enum Direction {
 }
 
 impl Direction {
-    pub fn delta(end: Pos, start: Pos) -> Direction {
-        let dx = start.x.cmp(&end.x);
-        let dy = start.y.cmp(&end.y);
-
+    pub fn delta(end: Pos, start: Pos, world: &World) -> Direction {
+        let mut dx = start.x.cmp(&end.x);
+        let mut dy = start.y.cmp(&end.y);
+        
+        if (start.x - end.x).abs() > (world.width / 2) as i16 {
+            dx = dx.reverse();    
+        }
+        if (start.y - end.y).abs() > (world.height / 2) as i16 {
+            dy = dy.reverse();    
+        }
+        
         match (dx, dy) {
             (Ordering::Less, Ordering::Less) => Direction::DownLeft,
             (Ordering::Less, Ordering::Equal) => Direction::Left,
