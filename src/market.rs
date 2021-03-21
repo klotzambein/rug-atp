@@ -1,9 +1,11 @@
+
 use crate::entity::EntityId;
 use crate::entity::resources::*;
 
 //use crate::sorted_vec;
 
 use std::convert::TryInto;
+use crate::entity::{EntityId, resources::{PerResource, ResourceItem}};
 
 #[derive(Debug, Clone, Default)]
 pub struct Market {
@@ -16,19 +18,46 @@ pub struct Market {
     market_price_wheat: (u16, u16),
     market_price_fish: (u16, u16),
     market_price_meat: (u16, u16),
+    orders: PerResource<Vec<Order>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Order {
-    value: u16,
-    amount: u16,
-    agent: EntityId,
-    expiration: u16
-}
+impl Market {
+    pub fn cache_prices(&mut self, tick: u32) {
+        for (_, orders) in self.orders.iter_mut() {
+            orders.iter_mut().for_each(|o| o.cache_price(tick));
+            orders.sort_by_key(|o| std::cmp::Reverse(o.cached_price))
+        }
+    }
 
-impl Market
-{
-    /*
+    pub fn prices(&self) -> PerResource<Option<u16>> {
+        self.orders.map(|os| Some(os.last()?.cached_price))
+    }
+
+    pub fn order(&mut self, agent: EntityId, item: ResourceItem, price: u16, amount: u16, tick: u32) {
+        let orders = &mut self.orders[item];
+        let pos = orders.binary_search_by_key(&price, |o| o.cached_price).unwrap_or_else(|e| e);
+        orders.insert(pos, Order {
+            cached_price: price,
+            value: price,
+            amount,
+            start: tick,
+            agent,
+        });
+    }
+
+    pub fn purchase(&mut self, item: ResourceItem) -> (EntityId, u16) {
+        let o = self.orders[item].last_mut().unwrap();
+        let price = o.cached_price;
+        let agent = o.agent;
+        o.amount -= 1;
+        if o.amount == 0 {
+            self.orders[item].pop();
+        }
+
+        (agent, price)
+    }
+
+        /*
         Private internal method that executes the purchase of the specific resource
     */
     fn buy_resource(&mut self, resource: ResourceItem, amount: u16) 
@@ -137,5 +166,24 @@ impl Market
             ResourceItem::Fish => self.total_amount(&self.orders_wheat),
             ResourceItem::Meat=> self.total_amount(&self.orders_wheat),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Order {
+    cached_price: u16,
+    value: u16,
+    amount: u16,
+    /// The tick this order was placed.
+    start: u32,
+    agent: EntityId,
+    expiration: u16
+}
+
+impl Order {
+    pub fn cache_price(&mut self, tick: u32) {
+        let dt = (tick - self.start) as f32;
+        let price = self.value as f32 / ((dt / 1000.) + 1.);
+        self.cached_price = price as u16;
     }
 }

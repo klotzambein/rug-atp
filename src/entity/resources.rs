@@ -149,6 +149,17 @@ pub struct PerResource<T> {
     pub meat: T,
 }
 
+impl<T: Clone> PerResource<T> {
+    pub fn new(val: T) -> PerResource<T> {
+        PerResource {
+            wheat: val.clone(),
+            berry: val.clone(),
+            fish: val.clone(),
+            meat: val,
+        }       
+    }
+}
+
 impl<T> PerResource<T> {
     pub fn iter(&self) -> impl Iterator<Item = (ResourceItem, &T)> {
         use std::iter::once;
@@ -164,6 +175,24 @@ impl<T> PerResource<T> {
             .chain(once((ResourceItem::Berry, &mut self.berry)))
             .chain(once((ResourceItem::Fish, &mut self.fish)))
             .chain(once((ResourceItem::Meat, &mut self.meat)))
+    }
+
+    pub fn map<U>(&self, mut f: impl FnMut(&T) -> U) -> PerResource<U> {
+        PerResource {
+            wheat: f(&self.wheat),
+            berry: f(&self.berry),
+            fish: f(&self.fish),
+            meat: f(&self.meat),
+        }
+    }
+
+    pub fn combine<V, U>(&self, other: &PerResource<V>, mut f: impl FnMut(&T, &V) -> U) -> PerResource<U> {
+        PerResource {
+            wheat: f(&self.wheat, &other.wheat),
+            berry: f(&self.berry, &other.berry),
+            fish: f(&self.fish, &other.fish),
+            meat: f(&self.meat, &other.meat),
+        }
     }
 }
 

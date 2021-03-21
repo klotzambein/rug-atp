@@ -8,7 +8,7 @@ use crate::{
         building::Building,
         resources::Resource,
     },
-    entity::{Entity, EntityId, EntityType},
+    entity::{resources::PerResource, Entity, EntityId, EntityType},
     generation::BiomeMap,
     grid::CanvasGrid,
     market::Market,
@@ -21,7 +21,7 @@ pub struct World {
     // tiles_resource: Vec<u8>,
     // tiles_action: Vec<TileAction>,
     entities: Vec<Entity>,
-    market: Market,
+    pub market: Market,
     // conflicts: Vec<Vec<TileAction>>,
     pub width: usize,
     pub height: usize,
@@ -154,6 +154,8 @@ impl World {
     }
 
     pub fn step_once(&mut self) {
+        self.market.cache_prices(self.tick);
+
         for i in 0..self.entities.len() {
             let mut entity = self.entities[i].clone();
             let id = EntityId::new(i);
@@ -237,8 +239,33 @@ impl World {
                 // Modify agent entity
                 a.collect(resource_farmed)
             }
-            AgentAction::MarketOrder { .. } => {}
-            AgentAction::MarketPurchase { .. } => {}
+            AgentAction::Consume(r) => {
+                a.consume(r)
+            }
+            AgentAction::MarketOrder {
+                item,
+                price,
+                amount,
+            } => {
+                let inventory = &mut a.inventory[item];
+                *inventory = inventory.checked_sub(amount).unwrap(); 
+                self.market.order(id, item, price, amount, self.tick);
+            }
+            AgentAction::MarketPurchase { item } => {
+                let (agent, price) = self.market.purchase(item);
+                a.collect(item);
+                a.cash = a.cash.checked_sub(price.into()).unwrap();
+
+                if let Entity {
+                    ty: EntityType::Agent(b),
+                    ..
+                } = &mut self.entities[agent.as_index()]
+                {
+                    b.cash += price as u32;
+                } else {
+                    panic!()
+                }
+            }
             AgentAction::None => {}
             AgentAction::Die => {
                 if a.in_building {
@@ -317,6 +344,10 @@ impl World {
     /// The days start at 0 and last 1000 ticks.
     pub fn time_of_day(&self) -> u16 {
         (self.tick % 1000) as u16
+    }
+
+    pub fn market_prices(&self) -> PerResource<Option<u16>> {
+        self.market.prices()
     }
 }
 

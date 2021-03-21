@@ -73,6 +73,15 @@ impl Agent {
                 Err(a) => a,
             },
             AgentState::BeHome => {
+                if self.energy < 5000 {
+                    let mut items = self.nutrition.iter().collect::<Vec<_>>();
+                    items.sort_by_key(|i| i.1);
+                    for (r, n) in items {
+                        if *n > 40 && self.inventory[r] > 0 {
+                            return AgentAction::Consume(r);
+                        }
+                    }
+                }
                 if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
                     // TODO: Make an informed choice
                     if random() {
@@ -86,7 +95,7 @@ impl Agent {
                 }
             }
             AgentState::DoJob => {
-                if self.energy < 1000 {
+                if self.energy < 1000 || world.time_of_day() > 800 {
                     self.state = AgentState::GoHome;
                 }
                 self.do_job(pos, world)
@@ -120,16 +129,6 @@ impl Agent {
                 }
             }
         }
-
-        // if self.in_building {
-        // if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
-        //     return AgentAction::Leave(p);
-        // } else {
-        //     return AgentAction::None;
-        // }
-        // }
-
-        // self.do_job(pos, world)
     }
 
     pub fn do_job(&mut self, pos: Pos, world: &World) -> AgentAction {
@@ -266,7 +265,37 @@ impl Agent {
         self.energy_quota = quota_f32.ceil() as u16;
     }
 
-    pub fn trade_on_market(&mut self, pos: Pos, world: &World) -> AgentAction {
+    pub fn trade_on_market(&mut self, _pos: Pos, world: &World) -> AgentAction {
+        for (r, i) in self.inventory.iter() {
+            if *i > 50 {
+                return AgentAction::MarketOrder {
+                    item: r,
+                    price: 20,
+                    amount: i - 50,
+                };
+            }
+        }
+
+        let util = self
+            .nutrition
+            .combine(&self.inventory, |n, i| *n as f32 - *i as f32 * 6.);
+        let prices = world.market_prices();
+        let util_per_dollar = util.combine(&prices, |u, p| Some(u / (*p)? as f32));
+
+        if let Some(best_resource) = util_per_dollar
+            .iter()
+            .filter_map(|(r, upd)| Some((r, (*upd)?)))
+            .filter(|(_, upd)| *upd > 0.)
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .map(|x| x.0)
+        {
+            if prices[best_resource].unwrap() <= self.cash as u16 {
+                return AgentAction::MarketPurchase {
+                    item: best_resource,
+                };
+            }
+        }
+
         AgentAction::None
     }
 
@@ -377,8 +406,8 @@ impl Default for Agent {
             job: random(),
             state: AgentState::DoJob,
             home: Pos::default(),
-            nutrition: PerResource::default(),
-            inventory: PerResource::default(),
+            nutrition: PerResource::new(100),
+            inventory: PerResource::new(0),
             energy: 5000,
             energy_quota: 5000,
             // TODO draw this from a normal distribution
@@ -412,6 +441,8 @@ pub enum AgentAction {
     Enter(Pos),
     /// Leave a building and go to pos
     Leave(Pos),
+    /// Consume a resource.
+    Consume(ResourceItem),
     /// This is only valid if an agent is in a market. This action will create
     /// an order at the given price with the specified amount
     MarketOrder {
@@ -421,7 +452,7 @@ pub enum AgentAction {
     },
     /// This is only valid if an agent is in a market. This action will purchase
     /// the given item at the cheapest market price.
-    MarketPurchase { item: ResourceItem, amount: u16 },
+    MarketPurchase { item: ResourceItem },
     /// Die: remove this agent from this agent from the world and set its dead
     /// flag to true.
     Die,
@@ -497,14 +528,14 @@ impl Direction {
     pub fn delta(end: Pos, start: Pos, world: &World) -> Direction {
         let mut dx = start.x.cmp(&end.x);
         let mut dy = start.y.cmp(&end.y);
-        
+
         if (start.x - end.x).abs() > (world.width / 2) as i16 {
-            dx = dx.reverse();    
+            dx = dx.reverse();
         }
         if (start.y - end.y).abs() > (world.height / 2) as i16 {
-            dy = dy.reverse();    
+            dy = dy.reverse();
         }
-        
+
         match (dx, dy) {
             (Ordering::Less, Ordering::Less) => Direction::DownLeft,
             (Ordering::Less, Ordering::Equal) => Direction::Left,
