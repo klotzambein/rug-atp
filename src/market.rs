@@ -25,7 +25,7 @@ impl Market {
     pub fn cache_prices(&mut self, tick: u32) {
         for (_, orders) in self.orders.iter_mut() {
             orders.iter_mut().for_each(|o| o.cache_price(tick));
-            orders.sort_by_key(|o| std::cmp::Reverse(o.cached_price))
+            orders.sort_by_key(|o| o.cached_price)
         }
     }
 

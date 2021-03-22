@@ -2,10 +2,10 @@ use std::{cell::RefCell, rc::Rc, time::Instant};
 
 use dear_gui::event_handling::Imgui;
 use glium::Surface;
-use imgui::{im_str, Condition, Slider, Ui, Window};
+use imgui::{im_str, Condition, PlotLines, Slider, Ui, Window};
 
 use crate::{
-    entity::EntityId,
+    entity::{resources::PerResource, EntityId},
     world::{Pos, World},
 };
 // We have idx_tile: usize -> world.tiles_type[idx_tile]: TileTexture -> get name through debug: String/str
@@ -13,6 +13,7 @@ pub struct UI {
     pub imgui: Rc<RefCell<Imgui>>,
     pub selected_entity: Option<EntityId>,
     pub selected_tile: Option<Pos>,
+    pub prices: PerResource<Vec<f32>>,
 }
 
 impl UI {
@@ -21,6 +22,7 @@ impl UI {
             imgui,
             selected_entity: None,
             selected_tile: None,
+            prices: PerResource::default(),
         }
     }
 
@@ -49,6 +51,7 @@ impl UI {
         // Here goes the code that describes the GUI
         ui.show_demo_window(&mut true);
         self.window_inspector(&ui, world);
+        self.window_market(&ui, world);
         self.window_stepper(&ui, world, tps);
 
         imgui.platform.prepare_render(&ui, &window);
@@ -64,6 +67,11 @@ impl UI {
             .size([200., 150.], Condition::Once)
             .position([350., 100.], Condition::Once)
             .build(ui, || {
+                ui.text(&format!(
+                    "Tick: {}, Time: {}",
+                    world.tick,
+                    world.time_of_day()
+                ));
                 ui.checkbox(im_str!("Run"), &mut world.is_running);
                 if ui.button(im_str!("Step"), [100., 30.]) {
                     world.step_once();
@@ -76,7 +84,7 @@ impl UI {
 
     fn window_inspector(&self, ui: &Ui, world: &World) {
         Window::new(im_str!("Inspector"))
-            .size([200., 200.], Condition::Once)
+            .size([250., 500.], Condition::Once)
             .build(ui, || {
                 if let Some(e_id) = self.selected_entity {
                     let e = world.entity(e_id);
@@ -97,6 +105,21 @@ impl UI {
                     ));
                 } else {
                     ui.text("Nothing selected");
+                }
+            });
+    }
+
+    fn window_market(&mut self, ui: &Ui, world: &World) {
+        Window::new(im_str!("Market"))
+            .size([200., 200.], Condition::Once)
+            .build(ui, || {
+                let prices = world.market.prices();
+                ui.text(&format!("Prices: {:#?}", prices.map(|p| p.unwrap_or(9999))));
+                for (r, p) in self.prices.iter_mut() {
+                    if world.is_running {
+                        p.push(prices[r].map(|p| p as f32).unwrap_or(f32::NAN));
+                    }
+                    PlotLines::new(ui, &im_str!("Price {:?}", r), p.as_ref()).graph_size([0., 50.]).build();
                 }
             });
     }
