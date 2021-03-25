@@ -7,6 +7,8 @@ use rand::{
 };
 
 use crate::world::{Pos, World};
+use crate::market::{Market, Order};
+use crate::entity::resources::*;
 
 use super::{
     building::Building,
@@ -29,8 +31,17 @@ pub struct Agent {
     pub nutrition: PerResource<u8>,
     /// This contains the amount of resources the agent possesses at the moment.
     pub inventory: PerResource<u16>,
+    /// This is the agent's goal for the day in terms of energy. It updates every day.
+    /// The main goal is that the agent does not end the day with less energy than they 
+    /// started. However, if their energy is below 5000 they are going to try and compensate
+    /// for that
+    pub energy_quota: u16,
     /// This is the agents current energy. This value is between 0 and 10_000
     pub energy: u16,
+    /// This is the greed of the agent. It denotes the desired cash profit for each day
+    /// It is initialized randomly from a normal distribution. It is initialized as an 
+    /// integer to satisfy the Hash trait but in use it is divided by 100
+    pub greed: u32,
     /// This is the agents current cash. This can be used to buy resources at
     /// the market.
     pub cash: u32,
@@ -56,6 +67,7 @@ impl Agent {
             AgentState::GoHome => match self.path_find(pos, Some(self.home), world) {
                 Ok(h) => {
                     self.state = AgentState::BeHome;
+                    self.update_energy_quota();
                     AgentAction::Enter(h)
                 }
                 Err(a) => a,
@@ -196,6 +208,64 @@ impl Agent {
         }
     }
 
+    pub fn make_mealing_plan(&self, market: Market) -> Option<PerResource<u16>> {
+        let mut to_ret: PerResource<u16> = PerResource::default();
+
+        if self.energy >= self.energy_quota { return None; }
+        
+        // Calculating the energy needed to fulfill the quota and updating it as the meal plan is constructed
+        let mut needed_energy = self.energy_quota - self.energy;
+        
+
+        // Finding the maximum projected energy over projected price (benefit) of each resource type on the market
+        for r_item in ResourceItem::sorted(self, &market).iter() {
+
+            // Calculating the energy gained by a single unit of that item
+            // and the needed amount to fulfill the quota 
+            let unit_energy = self.nutrition[*r_item] as u16;
+            let needed_amount: u16 = needed_energy / unit_energy + 
+                match needed_energy % unit_energy == 0 {
+                    true => 0,
+                    false => 1
+                };
+
+            // If the market or the inventory has more than the needed amount, 
+            // we can buy it and the agent doesn't need anything else in its mealing plan
+            let availability = market.availability(*r_item) + self.inventory[*r_item];
+            if  availability >= needed_amount 
+            {
+                to_ret[*r_item] = needed_amount;
+                return Some(to_ret);
+            }
+
+            // If the market does not have enough of the resource available, the agent buys whatever
+            // is available and  the loop keeps going on other, less cost-efficient resources
+            to_ret[*r_item] = availability;
+            needed_energy -= needed_amount * unit_energy;
+        }
+        return Some(to_ret);
+    }
+
+    // Every time an agent gets home (finishes the working day), they set an energy quota
+    // for the next day
+    pub fn update_energy_quota(&mut self) -> () {
+        let baseline = 5000;
+        // If the agent's energy is above the baseline, their goal for the next day is simply not to
+        // lose any more energy
+        if self.energy >= 5000 {
+            self.energy_quota = self.energy;
+            return;
+        }
+
+        // Otherwise, the agent has to compensate - they need to increase their energy the next day 
+        // by p%, where p is (5000 - energy) / 100
+        let mut p: f32 = (baseline - self.energy) as f32;
+        p /= 10000.0;
+
+        let quota_f32 = (self.energy as f32) * (1.0 + p);
+        self.energy_quota = quota_f32.ceil() as u16;
+    }
+
     pub fn trade_on_market(&mut self, pos: Pos, world: &World) -> AgentAction {
         AgentAction::None
     }
@@ -298,6 +368,7 @@ impl Agent {
             }
         }
     }
+
 }
 
 impl Default for Agent {
@@ -309,6 +380,9 @@ impl Default for Agent {
             nutrition: PerResource::default(),
             inventory: PerResource::default(),
             energy: 5000,
+            energy_quota: 5000,
+            // TODO draw this from a normal distribution
+            greed: 10,
             cash: 200,
             in_building: false,
             dead: false,

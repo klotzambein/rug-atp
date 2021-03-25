@@ -2,9 +2,12 @@
 //! spawn on rocks on the world. And in some other spaces. They can be gathered
 //! by the agents. After a resource has been depleted it will respawn somewhere
 //! else on a new rock or other spot.
+use std::slice::Iter;
+use crate::entity::agent::Agent;
+use crate::market::Market;
 
 // TODO IVO: here is where resources are defined
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq)]
 pub enum Resource {
     Wheat(u8),
     Berry(u8),
@@ -65,6 +68,79 @@ pub enum ResourceItem {
     Meat,
 }
 
+impl ResourceItem {
+    pub fn iterator() -> Iter<'static, ResourceItem> {
+        static RESOURCE_ITEMS: [ResourceItem; 4] = [
+            ResourceItem::Wheat,
+            ResourceItem::Berry,
+            ResourceItem::Fish,
+            ResourceItem::Meat,
+        ];
+        RESOURCE_ITEMS.iter()
+    }
+
+    pub fn sort_by_benefit(
+        items: &mut [ResourceItem; 4], 
+        agent: &Agent,
+        market: &Market
+    )
+    {
+
+        // Sort (direct selection) the array by the benefit 
+        // (given by the accumulated energy over the cost)
+        for i in 1..4 {
+            
+            let mut max_ind: u8 = 0;
+            let mut max_energy: u16 = 0;
+            let mut max: f32 = 0.0;
+
+            for j in i..4 {
+                
+                let (projected_price, _) = market.market_price(
+                    ResourceItem::from_ind(i)
+                );
+                let projected_energy = (agent.nutrition[i]) as f32;
+
+                let benefit: f32 = projected_energy / (projected_price as f32);
+
+                if benefit > max {
+                    max = benefit;
+                    max_ind = j;
+                }
+            }
+            
+            let swap: ResourceItem = items[i as usize];
+            items[i as usize] = items[max_ind as usize];
+            items[max_ind as usize] = swap;
+        }
+    }
+
+    pub fn sorted(
+        agent: &Agent,
+        market: &Market
+    ) -> [ResourceItem; 4] {
+        let mut RESOURCE_ITEMS: [ResourceItem; 4] = [
+            ResourceItem::Wheat,
+            ResourceItem::Berry,
+            ResourceItem::Fish,
+            ResourceItem::Meat,
+        ];
+        ResourceItem::sort_by_benefit(&mut RESOURCE_ITEMS, agent, market);
+        RESOURCE_ITEMS
+    }
+
+    pub fn from_ind(index: u8) -> ResourceItem {
+        match index {
+            0 => ResourceItem::Wheat,
+            1 => ResourceItem::Berry,
+            2 => ResourceItem::Fish,
+            3 => ResourceItem::Meat,
+            _ => panic!("Index {} out of bounds when trying to access a ResourceItem")
+        }
+    }
+}
+
+
 #[derive(Debug, Clone, Hash, Default)]
 pub struct PerResource<T> {
     pub wheat: T,
@@ -111,6 +187,33 @@ impl<T> std::ops::IndexMut<ResourceItem> for PerResource<T> {
             ResourceItem::Berry => &mut self.berry,
             ResourceItem::Fish => &mut self.fish,
             ResourceItem::Meat => &mut self.meat,
+        }
+    }
+}
+
+impl<T> std::ops::Index<u8> for PerResource<T> {
+    type Output = T;
+
+    fn index(&self, index: u8) -> &Self::Output {
+        match index {
+            0 => &self.wheat,
+            1 => &self.berry,
+            2 => &self.fish,
+            3 => &self.meat,
+            _ => panic!("Index {} out of bounds when trying to access a ResourceItem")
+        }
+    }
+}
+
+
+impl<T> std::ops::IndexMut<u8> for PerResource<T> {
+    fn index_mut(&mut self, index: u8) -> &mut Self::Output {
+        match index {
+            0 => &mut self.wheat,
+            1 => &mut self.berry,
+            2 => &mut self.fish,
+            3 => &mut self.meat,
+            _ => panic!("Index {} out of bounds when trying to access a ResourceItem")
         }
     }
 }
