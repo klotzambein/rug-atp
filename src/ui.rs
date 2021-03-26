@@ -119,7 +119,9 @@ impl UI {
                     if world.is_running {
                         p.push(prices[r].map(|p| p as f32).unwrap_or(f32::NAN));
                     }
-                    PlotLines::new(ui, &im_str!("Price {:?}", r), p.as_ref()).graph_size([0., 50.]).build();
+                    PlotLines::new(ui, &im_str!("Price {:?}", r), p.as_ref())
+                        .graph_size([0., 50.])
+                        .build();
                 }
             });
     }

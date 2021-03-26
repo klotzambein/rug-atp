@@ -1,11 +1,8 @@
-
-use crate::entity::EntityId;
-use crate::entity::resources::*;
-
-//use crate::sorted_vec;
-
+use crate::entity::{
+    resources::{PerResource, ResourceItem},
+    EntityId,
+};
 use std::convert::TryInto;
-use crate::entity::{EntityId, resources::{PerResource, ResourceItem}};
 
 #[derive(Debug, Clone, Default)]
 pub struct Market {
@@ -33,17 +30,17 @@ impl Market {
         self.orders.map(|os| Some(os.last()?.cached_price))
     }
 
-    pub fn order(&mut self, agent: EntityId, item: ResourceItem, price: u16, amount: u16, tick: u32) {
-        let orders = &mut self.orders[item];
-        let pos = orders.binary_search_by_key(&price, |o| o.cached_price).unwrap_or_else(|e| e);
-        orders.insert(pos, Order {
-            cached_price: price,
-            value: price,
-            amount,
-            start: tick,
-            agent,
-        });
-    }
+    // pub fn order(&mut self, agent: EntityId, item: ResourceItem, price: u16, amount: u16, tick: u32) {
+    //     let orders = &mut self.orders[item];
+    //     let pos = orders.binary_search_by_key(&price, |o| o.cached_price).unwrap_or_else(|e| e);
+    //     orders.insert(pos, Order {
+    //         cached_price: price,
+    //         value: price,
+    //         amount,
+    //         start: tick,
+    //         agent,
+    //     });
+    // }
 
     pub fn purchase(&mut self, item: ResourceItem) -> (EntityId, u16) {
         let o = self.orders[item].last_mut().unwrap();
@@ -57,16 +54,12 @@ impl Market {
         (agent, price)
     }
 
-        /*
-        Private internal method that executes the purchase of the specific resource
-    */
-    fn buy_resource(&mut self, resource: ResourceItem, amount: u16) 
-        -> Result<u16, (u16, u16)>
-    {
-        let mut orders: &Vec<Order> = self.get_orders(resource);
+    /// Private internal method that executes the purchase of the specific resource    
+    fn buy_resource(&mut self, resource: ResourceItem, amount: u16) -> Result<u16, (u16, u16)> {
+        let orders: &mut Vec<Order> = self.get_orders(resource);
         // Variables keeping track of the amount left to fulfill the buy order and accumulated price
         let mut am_left = amount;
-        let acc_price: u16 = 0;
+        let mut acc_price: u16 = 0;
 
         // Variables keeping track of the price of the last fulfilled order and the accumulated amount
         // of the resource being sold
@@ -75,44 +68,42 @@ impl Market {
 
         // Iterating through the orders from the cheapest to the most expensive and fulfilling them
         // until the requested amount is filled
-        for mut order in orders.iter()
-        {
-            if am_left == 0 { break; }
+        for order in orders.iter_mut() {
+            if am_left == 0 {
+                break;
+            }
 
             if order.amount > am_left.into() {
-                order.amount.saturating_sub(am_left.into());
-                acc_price.saturating_add(order.value * am_left);
+                order.amount = order.amount.saturating_sub(am_left.into());
+                acc_price = acc_price.saturating_add(order.value * am_left);
                 last_fulfilled = order.value;
                 demand_ord += am_left;
                 am_left = 0;
-            }
-
-            else {
-                am_left.saturating_sub(order.amount.try_into().unwrap());
-                acc_price.saturating_add(order.value * order.amount);
+            } else {
+                am_left = am_left.saturating_sub(order.amount.try_into().unwrap());
+                acc_price = acc_price.saturating_add(order.value * order.amount);
 
                 last_fulfilled = order.value;
                 demand_ord += order.amount;
 
-                order.amount.saturating_sub(order.amount);
+                order.amount = order.amount.saturating_sub(order.amount);
             }
         }
 
         // If the order is fully fulfilled only the accumulated price is returned
         // Otherwise, the fulfilled amount is returned as well
-        if am_left == 0 { 
+        if am_left == 0 {
             return Ok(acc_price);
         }
-        
+
         return Err((acc_price, am_left));
     }
 
-    pub fn buy(&mut self, resource: ResourceItem, amount: u16) -> Result<u16, (u16, u16)>
-    {
+    pub fn buy(&mut self, resource: ResourceItem, amount: u16) -> Result<u16, (u16, u16)> {
         let result = self.buy_resource(resource, amount);
-        
+
         // Remove all orders where the amount is 0
-        
+
         match resource {
             ResourceItem::Berry => {
                 self.orders_berry.retain(|ord| ord.amount > 0);
@@ -130,13 +121,12 @@ impl Market {
         result
     }
 
-    pub fn market_price(&self, resource_item: ResourceItem) -> (u16, u16)
-    {
+    pub fn market_price(&self, resource_item: ResourceItem) -> (u16, u16) {
         match resource_item {
             ResourceItem::Wheat => self.market_price_wheat,
             ResourceItem::Berry => self.market_price_berry,
             ResourceItem::Fish => self.market_price_fish,
-            ResourceItem::Meat=> self.market_price_meat,
+            ResourceItem::Meat => self.market_price_meat,
         }
     }
 
@@ -145,7 +135,7 @@ impl Market {
             ResourceItem::Wheat => &mut self.orders_wheat,
             ResourceItem::Berry => &mut self.orders_berry,
             ResourceItem::Fish => &mut self.orders_fish,
-            ResourceItem::Meat=> &mut self.orders_meat,
+            ResourceItem::Meat => &mut self.orders_meat,
         }
     }
 
@@ -158,13 +148,12 @@ impl Market {
         sum
     }
 
-    pub fn availability(&self, resource_item: ResourceItem) -> u16 
-    {
+    pub fn availability(&self, resource_item: ResourceItem) -> u16 {
         match resource_item {
             ResourceItem::Wheat => self.total_amount(&self.orders_wheat),
             ResourceItem::Berry => self.total_amount(&self.orders_wheat),
             ResourceItem::Fish => self.total_amount(&self.orders_wheat),
-            ResourceItem::Meat=> self.total_amount(&self.orders_wheat),
+            ResourceItem::Meat => self.total_amount(&self.orders_wheat),
         }
     }
 }
@@ -177,7 +166,7 @@ pub struct Order {
     /// The tick this order was placed.
     start: u32,
     agent: EntityId,
-    expiration: u16
+    expiration: u16,
 }
 
 impl Order {

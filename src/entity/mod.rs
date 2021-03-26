@@ -9,7 +9,11 @@ pub mod resources;
 
 use crate::world::Pos;
 
-use self::{agent::{Agent, AgentState}, building::Building, resources::Resource};
+use self::{
+    agent::{Agent, AgentState},
+    building::Building,
+    resources::Resource,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -56,7 +60,7 @@ impl Entity {
                 } else {
                     a.home.x.rem_euclid(8) as i32
                 }
-            },
+            }
             EntityType::Building(Building::Market) => 56,
             EntityType::Building(Building::Hut { .. }) => 57,
             EntityType::Building(Building::Boat { agent: None }) => 49,

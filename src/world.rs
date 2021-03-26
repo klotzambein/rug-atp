@@ -239,17 +239,15 @@ impl World {
                 // Modify agent entity
                 a.collect(resource_farmed)
             }
-            AgentAction::Consume(r) => {
-                a.consume(r)
-            }
+            AgentAction::Consume(r) => a.consume(r),
             AgentAction::MarketOrder {
                 item,
                 price,
                 amount,
             } => {
                 let inventory = &mut a.inventory[item];
-                *inventory = inventory.checked_sub(amount).unwrap(); 
-                self.market.order(id, item, price, amount, self.tick);
+                *inventory = inventory.checked_sub(amount).unwrap();
+                // self.market.order(id, item, price, amount, self.tick);
             }
             AgentAction::MarketPurchase { item } => {
                 let (agent, price) = self.market.purchase(item);

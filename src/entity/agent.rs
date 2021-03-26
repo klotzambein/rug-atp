@@ -6,9 +6,8 @@ use rand::{
     Rng,
 };
 
+use crate::market::Market;
 use crate::world::{Pos, World};
-use crate::market::{Market, Order};
-use crate::entity::resources::*;
 
 use super::{
     building::Building,
@@ -32,14 +31,14 @@ pub struct Agent {
     /// This contains the amount of resources the agent possesses at the moment.
     pub inventory: PerResource<u16>,
     /// This is the agent's goal for the day in terms of energy. It updates every day.
-    /// The main goal is that the agent does not end the day with less energy than they 
+    /// The main goal is that the agent does not end the day with less energy than they
     /// started. However, if their energy is below 5000 they are going to try and compensate
     /// for that
     pub energy_quota: u16,
     /// This is the agents current energy. This value is between 0 and 10_000
     pub energy: u16,
     /// This is the greed of the agent. It denotes the desired cash profit for each day
-    /// It is initialized randomly from a normal distribution. It is initialized as an 
+    /// It is initialized randomly from a normal distribution. It is initialized as an
     /// integer to satisfy the Hash trait but in use it is divided by 100
     pub greed: u32,
     /// This is the agents current cash. This can be used to buy resources at
@@ -210,29 +209,28 @@ impl Agent {
     pub fn make_mealing_plan(&self, market: Market) -> Option<PerResource<u16>> {
         let mut to_ret: PerResource<u16> = PerResource::default();
 
-        if self.energy >= self.energy_quota { return None; }
-        
+        if self.energy >= self.energy_quota {
+            return None;
+        }
+
         // Calculating the energy needed to fulfill the quota and updating it as the meal plan is constructed
         let mut needed_energy = self.energy_quota - self.energy;
-        
 
         // Finding the maximum projected energy over projected price (benefit) of each resource type on the market
         for r_item in ResourceItem::sorted(self, &market).iter() {
-
             // Calculating the energy gained by a single unit of that item
-            // and the needed amount to fulfill the quota 
+            // and the needed amount to fulfill the quota
             let unit_energy = self.nutrition[*r_item] as u16;
-            let needed_amount: u16 = needed_energy / unit_energy + 
-                match needed_energy % unit_energy == 0 {
+            let needed_amount: u16 = needed_energy / unit_energy
+                + match needed_energy % unit_energy == 0 {
                     true => 0,
-                    false => 1
+                    false => 1,
                 };
 
-            // If the market or the inventory has more than the needed amount, 
+            // If the market or the inventory has more than the needed amount,
             // we can buy it and the agent doesn't need anything else in its mealing plan
             let availability = market.availability(*r_item) + self.inventory[*r_item];
-            if  availability >= needed_amount 
-            {
+            if availability >= needed_amount {
                 to_ret[*r_item] = needed_amount;
                 return Some(to_ret);
             }
@@ -256,7 +254,7 @@ impl Agent {
             return;
         }
 
-        // Otherwise, the agent has to compensate - they need to increase their energy the next day 
+        // Otherwise, the agent has to compensate - they need to increase their energy the next day
         // by p%, where p is (5000 - energy) / 100
         let mut p: f32 = (baseline - self.energy) as f32;
         p /= 10000.0;
@@ -397,7 +395,6 @@ impl Agent {
             }
         }
     }
-
 }
 
 impl Default for Agent {
