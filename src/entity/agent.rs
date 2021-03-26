@@ -29,14 +29,14 @@ pub struct Agent {
     /// eaten.
     pub nutrition: PerResource<u8>,
     /// This contains the amount of resources the agent possesses at the moment.
-    pub inventory: PerResource<u16>,
+    pub inventory: PerResource<u32>,
     /// This is the agent's goal for the day in terms of energy. It updates every day.
     /// The main goal is that the agent does not end the day with less energy than they
     /// started. However, if their energy is below 5000 they are going to try and compensate
     /// for that
-    pub energy_quota: u16,
+    pub energy_quota: u32,
     /// This is the agents current energy. This value is between 0 and 10_000
-    pub energy: u16,
+    pub energy: u32,
     /// This is the greed of the agent. It denotes the desired cash profit for each day
     /// It is initialized randomly from a normal distribution. It is initialized as an
     /// integer to satisfy the Hash trait but in use it is divided by 100
@@ -44,6 +44,8 @@ pub struct Agent {
     /// This is the agents current cash. This can be used to buy resources at
     /// the market.
     pub cash: u32,
+    // This is the cash that the agent needs to make
+    pub cash_quota: u32,
     /// This is true when the agent is in a building. To check which building
     /// the agent is in look up the current position in the world.
     pub in_building: bool,
@@ -66,7 +68,7 @@ impl Agent {
             AgentState::GoHome => match self.path_find(pos, Some(self.home), world) {
                 Ok(h) => {
                     self.state = AgentState::BeHome;
-                    self.update_energy_quota();
+                    self.update_quotas();
                     AgentAction::Enter(h)
                 }
                 Err(a) => a,
@@ -94,7 +96,7 @@ impl Agent {
                 }
             }
             AgentState::DoJob => {
-                if self.energy < 1000 || world.time_of_day() > 800 {
+                if self.energy < 1000 || world.time_of_day() > 150 {
                     self.state = AgentState::GoHome;
                 }
                 self.do_job(pos, world)
@@ -166,7 +168,7 @@ impl Agent {
                     // matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
                     match &e.ty {
                         EntityType::Resource(r) => {
-                            observations[r.product()] += r.available() as u16 / 10
+                            observations[r.product()] += r.available() as u32 / 10
                         }
                         EntityType::Building(Building::Boat { .. }) => observations.fish += 30,
                         _ => (),
@@ -176,7 +178,7 @@ impl Agent {
 
                 *count += 1;
                 if *count == 200 {
-                    let mut max_freq: u16 = 0;
+                    let mut max_freq: u32 = 0;
                     let mut best_item: ResourceItem = ResourceItem::Berry;
                     for (resource, observation) in observations.iter() {
                         if *observation > max_freq {
@@ -206,8 +208,8 @@ impl Agent {
         }
     }
 
-    pub fn make_mealing_plan(&self, market: Market) -> Option<PerResource<u16>> {
-        let mut to_ret: PerResource<u16> = PerResource::default();
+    pub fn make_mealing_plan(&self, market: &Market) -> Option<PerResource<u32>> {
+        let mut to_ret: PerResource<u32> = PerResource::default();
 
         if self.energy >= self.energy_quota {
             return None;
@@ -220,8 +222,8 @@ impl Agent {
         for r_item in ResourceItem::sorted(self, &market).iter() {
             // Calculating the energy gained by a single unit of that item
             // and the needed amount to fulfill the quota
-            let unit_energy = self.nutrition[*r_item] as u16;
-            let needed_amount: u16 = needed_energy / unit_energy
+            let unit_energy = self.nutrition[*r_item] as u32;
+            let needed_amount: u32 = needed_energy / unit_energy
                 + match needed_energy % unit_energy == 0 {
                     true => 0,
                     false => 1,
@@ -245,8 +247,8 @@ impl Agent {
 
     // Every time an agent gets home (finishes the working day), they set an energy quota
     // for the next day
-    pub fn update_energy_quota(&mut self) -> () {
-        let baseline = 5000;
+    pub fn update_quotas(&mut self) -> () {
+        let baseline_energy = 5000;
         // If the agent's energy is above the baseline, their goal for the next day is simply not to
         // lose any more energy
         if self.energy >= 5000 {
@@ -254,16 +256,44 @@ impl Agent {
             return;
         }
 
+        let desired_profit: f32 = (self.greed as f32) / 100.0;
+        self.cash_quota = ((self.cash as f32) * desired_profit) as u32;
+
         // Otherwise, the agent has to compensate - they need to increase their energy the next day
         // by p%, where p is (5000 - energy) / 100
-        let mut p: f32 = (baseline - self.energy) as f32;
+        let mut p: f32 = (baseline_energy - self.energy) as f32;
         p /= 10000.0;
 
         let quota_f32 = (self.energy as f32) * (1.0 + p);
-        self.energy_quota = quota_f32.ceil() as u16;
+        self.energy_quota = quota_f32.ceil() as u32;
     }
 
     pub fn trade_on_market(&mut self, _pos: Pos, world: &World) -> AgentAction {
+        // If the agent does not have enough money to fulfill their energy
+        // quota, they will continuously try to buy stuff they can't afford
+        // instead of selling something to get more money
+        // TODO fix this
+        //if self.cash 
+        if self.energy <= self.energy_quota {
+            let market = &world.market;
+            let mut total_price: u32 = 0;
+            // let market = world.entity_at(pos);
+
+            if let Some(meal_plan) = self.make_mealing_plan(market) {
+                for r_item in ResourceItem::iterator() {
+                    if meal_plan[*r_item] == 0 {
+                        continue;
+                    }
+                    total_price = total_price.saturating_add(
+                        market.market_price[*r_item] * 
+                        meal_plan[*r_item]);
+                    return AgentAction::MarketPurchase {
+                        item: *r_item,
+                        amount: meal_plan[*r_item],
+                    };
+                }
+            };
+        }
         for (r, i) in self.inventory.iter() {
             if *i > 50 {
                 return AgentAction::MarketOrder {
@@ -287,9 +317,10 @@ impl Agent {
             .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
             .map(|x| x.0)
         {
-            if prices[best_resource].unwrap() <= self.cash as u16 {
+            if prices[best_resource].unwrap() <= self.cash as u32 {
                 return AgentAction::MarketPurchase {
                     item: best_resource,
+                    amount: 1,
                 };
             }
         }
@@ -376,14 +407,14 @@ impl Agent {
     }
 
     /// This function will add the given resource to the agents inventory.
-    pub fn collect(&mut self, resource: ResourceItem) {
-        self.inventory[resource] += 1;
+    pub fn collect(&mut self, resource: ResourceItem, amount: u32) {
+        self.inventory[resource] += amount;
     }
 
     pub fn consume(&mut self, resource: ResourceItem) {
         assert!(self.inventory[resource] > 0);
         self.inventory[resource] -= 1;
-        self.energy += self.nutrition[resource] as u16;
+        self.energy += self.nutrition[resource] as u32;
         if self.energy > 10000 {
             self.energy = 10000;
         }
@@ -410,6 +441,7 @@ impl Default for Agent {
             // TODO draw this from a normal distribution
             greed: 10,
             cash: 200,
+            cash_quota: 200,
             in_building: false,
             dead: false,
         }
@@ -417,7 +449,7 @@ impl Default for Agent {
 }
 
 /// This keeps track of what the agent is currently doing.
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash)]
 pub enum AgentState {
     BeHome,
     GoHome,
@@ -444,12 +476,12 @@ pub enum AgentAction {
     /// an order at the given price with the specified amount
     MarketOrder {
         item: ResourceItem,
-        price: u16,
-        amount: u16,
+        price: u32,
+        amount: u32,
     },
     /// This is only valid if an agent is in a market. This action will purchase
     /// the given item at the cheapest market price.
-    MarketPurchase { item: ResourceItem },
+    MarketPurchase { item: ResourceItem, amount: u32 },
     /// Die: remove this agent from this agent from the world and set its dead
     /// flag to true.
     Die,
@@ -460,7 +492,7 @@ pub enum Job {
     // None,
     Explorer {
         count: u8,
-        observations: PerResource<u16>,
+        observations: PerResource<u32>,
     },
     Farmer,
     Lumberer,

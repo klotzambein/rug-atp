@@ -10,8 +10,10 @@ pub mod market;
 pub mod tile;
 pub mod ui;
 pub mod world;
+pub mod statistics;
 
 use grid::CanvasGrid;
+use statistics::Statistics;
 use ui::UI;
 use world::{Pos, World};
 
@@ -20,7 +22,9 @@ const WORLD_CHUNK_LEN: usize = 30;
 fn main() {
     let mut app = AppInit::new();
 
-    let ui = Rc::new(RefCell::new(UI::new(app.imgui.clone())));
+    let stats = Rc::new(RefCell::new(Statistics::default()));
+
+    let ui = Rc::new(RefCell::new(UI::new(app.imgui.clone(), stats.clone())));
 
     let mut grid = CanvasGrid::new(&app.display, WORLD_CHUNK_LEN, WORLD_CHUNK_LEN);
     let world = Rc::new(RefCell::new(World::new(
@@ -65,7 +69,7 @@ fn main() {
         if i % 1000 == 0 {
             println!("{}%", i as f32 / PRE_RUN_STEPS as f32 * 100.);
         }
-        world.borrow_mut().step();
+        world.borrow_mut().step(&mut *stats.borrow_mut());
     }
 
     let mut tps = 2.;
@@ -84,7 +88,7 @@ fn main() {
         let start_sim = Instant::now();
         while seconds > 0. {
             seconds -= 1. / tps;
-            world.borrow_mut().step();
+            world.borrow_mut().step(&mut *stats.borrow_mut());
             if (Instant::now() - start_sim).as_secs_f32() > 0.1 {
                 tps = 100f32.max(tps / 2.);
                 seconds = 0.0;

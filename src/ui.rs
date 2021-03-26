@@ -5,7 +5,8 @@ use glium::Surface;
 use imgui::{im_str, Condition, PlotLines, Slider, Ui, Window};
 
 use crate::{
-    entity::{resources::PerResource, EntityId},
+    entity::EntityId,
+    statistics::Statistics,
     world::{Pos, World},
 };
 // We have idx_tile: usize -> world.tiles_type[idx_tile]: TileTexture -> get name through debug: String/str
@@ -13,16 +14,16 @@ pub struct UI {
     pub imgui: Rc<RefCell<Imgui>>,
     pub selected_entity: Option<EntityId>,
     pub selected_tile: Option<Pos>,
-    pub prices: PerResource<Vec<f32>>,
+    stats: Rc<RefCell<Statistics>>,
 }
 
 impl UI {
-    pub fn new(imgui: Rc<RefCell<Imgui>>) -> UI {
+    pub fn new(imgui: Rc<RefCell<Imgui>>, stats: Rc<RefCell<Statistics>>) -> UI {
         UI {
             imgui,
             selected_entity: None,
             selected_tile: None,
-            prices: PerResource::default(),
+            stats,
         }
     }
 
@@ -53,6 +54,7 @@ impl UI {
         self.window_inspector(&ui, world);
         self.window_market(&ui, world);
         self.window_stepper(&ui, world, tps);
+        self.window_stats(&ui, world);
 
         imgui.platform.prepare_render(&ui, &window);
         let draw_data = ui.render();
@@ -68,13 +70,13 @@ impl UI {
             .position([350., 100.], Condition::Once)
             .build(ui, || {
                 ui.text(&format!(
-                    "Tick: {}, Time: {}",
-                    world.tick,
+                    "Day: {}, Time: {}",
+                    world.tick / 200,
                     world.time_of_day()
                 ));
                 ui.checkbox(im_str!("Run"), &mut world.is_running);
                 if ui.button(im_str!("Step"), [100., 30.]) {
-                    world.step_once();
+                    world.step_once(&mut *self.stats.borrow_mut());
                 }
                 Slider::new(im_str!("TPS"), 0.5..=1000.)
                     .power(5.)
@@ -113,79 +115,30 @@ impl UI {
         Window::new(im_str!("Market"))
             .size([200., 200.], Condition::Once)
             .build(ui, || {
-                let prices = world.market.prices();
-                ui.text(&format!("Prices: {:#?}", prices.map(|p| p.unwrap_or(9999))));
-                for (r, p) in self.prices.iter_mut() {
-                    if world.is_running {
-                        p.push(prices[r].map(|p| p as f32).unwrap_or(f32::NAN));
-                    }
+                let prices = world
+                    .market
+                    .prices()
+                    .map(|p| p.map(|p| p as f32).unwrap_or(f32::NAN));
+                ui.text(&format!("Prices: {:#?}", prices));
+                for (r, p) in self.stats.borrow().prices.iter() {
                     PlotLines::new(ui, &im_str!("Price {:?}", r), p.as_ref())
                         .graph_size([0., 50.])
                         .build();
                 }
             });
     }
+
+    fn window_stats(&mut self, ui: &Ui, world: &World) {
+        Window::new(im_str!("Statistics"))
+            .size([500., 200.], Condition::Once)
+            .build(ui, || {
+                PlotLines::new(
+                    ui,
+                    &im_str!("Alive agents:\n{}", world.alive_count),
+                    self.stats.borrow().agent_count.as_ref(),
+                )
+                .graph_size([0., 50.])
+                .build();
+            });
+    }
 }
-
-// pub struct UILayers;
-// impl UIComponent<CommandExecutor> for UILayers {
-//     type Model = Vec<(String, bool)>;
-//     fn draw(&mut self, ui: &Ui, model: &Self::Model, cmd: &mut CommandExecutor) {
-//         Window::new(im_str!("Layers")).build(ui, || {
-//             for (i, (l, vis)) in model.iter().enumerate() {
-//                 let id = ui.push_id(i as i32);
-//                 let mut vis = *vis;
-//                 ui.text(&l);
-//                 ui.same_line(120.);
-//                 if ui.checkbox_flags(im_str!(""), &mut vis, true) {
-//                     cmd.execute(Command::NamedWithArgs {
-//                         name: "set_layer_visibility".to_owned(),
-//                         arguments: vec![Value::Bool(vis), Value::String(l.clone())],
-//                     });
-//                 }
-//                 ui.spacing();
-//                 id.pop(ui)
-//             }
-//         });
-//     }
-// }
-
-// pub struct UIMenuBar;
-// impl UIComponent<CommandExecutor> for UIMenuBar {
-//     type Model = ();
-//     fn draw(&mut self, ui: &Ui, _: &Self::Model, cmd: &mut CommandExecutor) {
-//         ui.main_menu_bar(|| {
-//             ui.menu(im_str!("Actions"), true, || {
-//                 if MenuItem::new(im_str!("detect_room")).build(ui) {
-//                     cmd.execute(Command::Named {
-//                         name: "detect_room".to_owned(),
-//                     })
-//                 }
-//             });
-//         });
-//     }
-// }
-
-// pub struct UIStatus;
-// impl UIComponent<CommandExecutor> for UIStatus {
-//     type Model = CommandRequest;
-
-//     fn draw(&mut self, ui: &Ui, model: &CommandRequest, _: &mut CommandExecutor) {
-//         match model {
-//             CommandRequest::Point(_) => {
-//                 ui.text("Please select a point.");
-//             }
-//             CommandRequest::None => {
-//                 ui.text("All good.");
-//             }
-//         }
-//     }
-// }
-
-// pub struct UITester(pub &'static str);
-// impl UIComponent<CommandExecutor> for UITester {
-//     type Model = ();
-//     fn draw(&mut self, ui: &Ui, _: &Self::Model, _: &mut CommandExecutor) {
-//         ui.text(self.0)
-//     }
-// }

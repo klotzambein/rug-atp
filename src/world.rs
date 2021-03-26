@@ -12,6 +12,7 @@ use crate::{
     generation::BiomeMap,
     grid::CanvasGrid,
     market::Market,
+    statistics::Statistics,
     tile::TileType,
 };
 
@@ -28,6 +29,7 @@ pub struct World {
     pub dirty: bool,
     pub tick: u32,
     pub is_running: bool,
+    pub alive_count: u32,
 }
 
 impl World {
@@ -63,6 +65,7 @@ impl World {
             dirty: true,
             tick: 0,
             is_running: true,
+            alive_count: 0,
         }
     }
 
@@ -147,14 +150,15 @@ impl World {
         &self.entities[id.as_index()]
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self, stats: &mut Statistics) {
         if self.is_running {
-            self.step_once()
+            self.step_once(stats)
         }
     }
 
-    pub fn step_once(&mut self) {
+    pub fn step_once(&mut self, stats: &mut Statistics) {
         self.market.cache_prices(self.tick);
+        self.alive_count = 0;
 
         for i in 0..self.entities.len() {
             let mut entity = self.entities[i].clone();
@@ -171,9 +175,16 @@ impl World {
             self.entities[i] = entity;
         }
         self.tick += 1;
+        stats.step(self);
     }
 
     fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, id: EntityId) {
+        if a.dead {
+            return;
+        }
+
+        self.alive_count += 1;
+
         let current_tile_idx = self.idx(*pos);
         match a.step(*pos, &self) {
             AgentAction::Move(p) => {
@@ -237,7 +248,7 @@ impl World {
                 };
 
                 // Modify agent entity
-                a.collect(resource_farmed)
+                a.collect(resource_farmed, 1)
             }
             AgentAction::Consume(r) => a.consume(r),
             AgentAction::MarketOrder {
@@ -247,21 +258,24 @@ impl World {
             } => {
                 let inventory = &mut a.inventory[item];
                 *inventory = inventory.checked_sub(amount).unwrap();
-                // self.market.order(id, item, price, amount, self.tick);
+                self.market.order(id, item, price, amount);
             }
-            AgentAction::MarketPurchase { item } => {
-                let (agent, price) = self.market.purchase(item);
-                a.collect(item);
-                a.cash = a.cash.checked_sub(price.into()).unwrap();
+            AgentAction::MarketPurchase { item, amount } => {
+                let (agents, resources_gained) = self.market.buy(item, amount, a.cash);
+                a.collect(item, resources_gained);
 
-                if let Entity {
-                    ty: EntityType::Agent(b),
-                    ..
-                } = &mut self.entities[agent.as_index()]
-                {
-                    b.cash += price as u32;
-                } else {
-                    panic!()
+                for (agent, price) in agents {
+                    a.cash = a.cash.checked_sub(price.into()).unwrap();
+
+                    if let Entity {
+                        ty: EntityType::Agent(b),
+                        ..
+                    } = &mut self.entities[agent.as_index()]
+                    {
+                        b.cash += price as u32;
+                    } else {
+                        panic!()
+                    }
                 }
             }
             AgentAction::None => {}
@@ -339,12 +353,12 @@ impl World {
         self.tile_type(p).walkable() && self.entity_at(p).is_none()
     }
 
-    /// The days start at 0 and last 1000 ticks.
+    /// The days start at 0 and last 200 ticks.
     pub fn time_of_day(&self) -> u16 {
-        (self.tick % 1000) as u16
+        (self.tick % 200) as u16
     }
 
-    pub fn market_prices(&self) -> PerResource<Option<u16>> {
+    pub fn market_prices(&self) -> PerResource<Option<u32>> {
         self.market.prices()
     }
 }

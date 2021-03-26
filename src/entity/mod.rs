@@ -55,7 +55,7 @@ impl Entity {
     pub fn texture(&self) -> i32 {
         match &self.ty {
             EntityType::Agent(a) => {
-                if a.state == AgentState::DoJob {
+                if matches!(a.state, AgentState::DoJob) {
                     a.job.texture()
                 } else {
                     a.home.x.rem_euclid(8) as i32
