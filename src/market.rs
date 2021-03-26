@@ -121,6 +121,15 @@ impl Market {
         (self.market_price[resource_item], self.market_demand[resource_item])
     }
 
+    pub fn total_price(&self, meals: &PerResource<u32>) -> u32 {
+        let mut sum: u32 = 0;
+        for r_item in ResourceItem::iterator() {
+            sum += self.market_price[*r_item];
+        }
+
+        sum
+    }
+
     fn total_amount(&self, orders: &Vec<Order>) -> u32 {
         let mut sum: u32 = 0;
         for order in orders.iter() {

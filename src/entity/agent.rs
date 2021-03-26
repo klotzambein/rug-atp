@@ -30,6 +30,10 @@ pub struct Agent {
     pub nutrition: PerResource<u8>,
     /// This contains the amount of resources the agent possesses at the moment.
     pub inventory: PerResource<u32>,
+    /// This contains the meal plan for the day
+    pub shopping_list: Option<PerResource<u32>>,
+    /// This contains the shopping list for the day
+    pub meal_plan: Option<PerResource<u32>>,
     /// This is the agent's goal for the day in terms of energy. It updates every day.
     /// The main goal is that the agent does not end the day with less energy than they
     /// started. However, if their energy is below 5000 they are going to try and compensate
@@ -256,9 +260,6 @@ impl Agent {
             return;
         }
 
-        let desired_profit: f32 = (self.greed as f32) / 100.0;
-        self.cash_quota = ((self.cash as f32) * desired_profit) as u32;
-
         // Otherwise, the agent has to compensate - they need to increase their energy the next day
         // by p%, where p is (5000 - energy) / 100
         let mut p: f32 = (baseline_energy - self.energy) as f32;
@@ -266,64 +267,146 @@ impl Agent {
 
         let quota_f32 = (self.energy as f32) * (1.0 + p);
         self.energy_quota = quota_f32.ceil() as u32;
+
+        // Update the cash quota with respect to the greed
+        let desired_profit: f32 = (self.greed as f32) / 100.0;
+        self.cash_quota = ((self.cash as f32) * desired_profit) as u32;
+    }
+
+    fn make_shopping_list(&self, meal_plan: &Option<PerResource<u32>>) -> Option<PerResource<u32>> {
+        // It subtracts the stuff they need from the stuff they have, so they don't buy excessively
+        // If you need a product, you check how much of it you have and you put the rest on your shopping list
+        let mut to_ret: PerResource<u32> = PerResource::default();
+
+        if let Some(_meal_plan) = meal_plan {
+            // Boolean flag about whether there is a single item on the shopping list
+            let mut empty: bool = true;
+            for r_item in ResourceItem::iterator() {
+                // The item is only added to the shopping list if the agent currently has less than it needs
+                if _meal_plan[*r_item] > self.inventory[*r_item] {
+                    to_ret[*r_item] = _meal_plan[*r_item].saturating_sub(self.inventory[*r_item]);
+                    empty = false;
+                }
+            }
+
+            if empty {
+                return None;
+            }
+            return Some(to_ret);
+        }
+
+        else {
+            return None;
+        }
+        
+    }
+
+    fn modify_shopping_item(&mut self, r_item: ResourceItem, amount: u32) {
+
     }
 
     pub fn trade_on_market(&mut self, _pos: Pos, world: &World) -> AgentAction {
+
+        // If a shopping list is not constructed and the energy is below the quota, it constructs it
+        // TODO update for multiple markets
+        let market: &Market = &world.market;
+
+        if let None = self.meal_plan {
+            self.meal_plan = self.make_mealing_plan(market);
+            self.shopping_list = self.make_shopping_list(&self.meal_plan);
+        }
+
+        // After a shopping list has been constructed, it sells everything they don't need
+
+        // Specifically the item that they mine at their job will be the one they may have an excess of
+        let item_sell: Option<ResourceItem> = match self.job {
+            Job::Butcher => Some(ResourceItem::Meat),
+            Job::Farmer => Some(ResourceItem::Wheat),
+            Job::Lumberer => Some(ResourceItem::Berry),
+            Job::Fisher => Some(ResourceItem::Fish),
+            Job::Explorer{ .. } => None
+        };
+
+        // If the agent is not an explorer, they will sell everything they don't need from their resources
+        if let Some(r_item) = item_sell {
+            let excess: u32 = match &self.meal_plan {
+                Some(_meal_plan) => 
+                    if self.inventory[r_item] > _meal_plan[r_item] {
+                        self.inventory[r_item] - _meal_plan[r_item]
+                    } else {
+                        0
+                    },
+                None => 0
+            };
+
+            
+            // It needs to calculate the total money spent on shopping
+            let total_price: u32 = match &self.shopping_list {
+                Some(_shopping_list) => market.total_price(_shopping_list),
+                None => 0,
+            };
+            
+            // After it has calculated the excess, it has to calculate the price needed to fulfill the quota
+            let balance_after_purchase: u32 = 
+                if self.cash > total_price {
+                    self.cash - total_price
+                }
+                else {
+                    0
+                };
+            
+            // insufficiency = 30   balance = 10 price = 3
+            let insufficiency = self.cash_quota - balance_after_purchase;
+            let _price = insufficiency / excess + 
+                (insufficiency % excess != 0) as u32;
+
+            // Finally it puts the order on the action list
+            return AgentAction::MarketOrder {
+                item: r_item,
+                price: _price,
+                amount: excess,
+            };
+        }
+
+
         // If the agent does not have enough money to fulfill their energy
         // quota, they will continuously try to buy stuff they can't afford
         // instead of selling something to get more money
         // TODO fix this
-        //if self.cash 
-        if self.energy <= self.energy_quota {
-            let market = &world.market;
-            let mut total_price: u32 = 0;
-            // let market = world.entity_at(pos);
+        // Finally it buys everything on the shopping list
+        let mut action: AgentAction = AgentAction::None;
+        let mut purchased_item: Option<ResourceItem> = None;
 
-            if let Some(meal_plan) = self.make_mealing_plan(market) {
-                for r_item in ResourceItem::iterator() {
-                    if meal_plan[*r_item] == 0 {
-                        continue;
-                    }
-                    total_price = total_price.saturating_add(
-                        market.market_price[*r_item] * 
-                        meal_plan[*r_item]);
-                    return AgentAction::MarketPurchase {
-                        item: *r_item,
-                        amount: meal_plan[*r_item],
-                    };
+        if let Some(s_list) = &self.shopping_list {
+            for r_item in ResourceItem::iterator() {
+                if s_list[*r_item] == 0 {
+                    continue;
                 }
-            };
-        }
-        for (r, i) in self.inventory.iter() {
-            if *i > 50 {
-                return AgentAction::MarketOrder {
-                    item: r,
-                    price: 20,
-                    amount: i - 50,
+                purchased_item = Some(*r_item);
+                action = AgentAction::MarketPurchase {
+                    item: *r_item,
+                    amount: s_list[*r_item],
                 };
-            }
+            }        
         }
 
-        let util = self
-            .nutrition
-            .combine(&self.inventory, |n, i| *n as f32 - *i as f32 * 6.);
-        let prices = world.market_prices();
-        let util_per_dollar = util.combine(&prices, |u, p| Some(u / (*p)? as f32));
+        // Remove the purchased item from the shopping list before returning
+        // TODO Robin: once again, mutability issues that I can't figure out
+        // I made shopping list and meal_plan fields in Agent but I realized them as Options
+        // because it is more generalizable and elegant. But now I can't change the value of one of the
+        // resources in the PerResource because I need to unpack it and the some mutability shit
 
-        if let Some(best_resource) = util_per_dollar
-            .iter()
-            .filter_map(|(r, upd)| Some((r, (*upd)?)))
-            .filter(|(_, upd)| *upd > 0.)
-            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-            .map(|x| x.0)
-        {
-            if prices[best_resource].unwrap() <= self.cash as u32 {
-                return AgentAction::MarketPurchase {
-                    item: best_resource,
-                    amount: 1,
-                };
+        // If you want to try and fix this, what I want this code to do is set the amount of purchased_item
+        // in self.shopping_plan to 0
+        let mut shopping_list_copy = self.shopping_list.clone();
+
+        if let Some(mut _list) = shopping_list_copy {
+            if let Some(r_item) = purchased_item {
+                _list[r_item] = 0;
             }
         }
+        
+        self.shopping_list = shopping_list_copy;
 
         AgentAction::None
     }
@@ -440,6 +523,8 @@ impl Default for Agent {
             energy_quota: 5000,
             // TODO draw this from a normal distribution
             greed: 10,
+            meal_plan: None,
+            shopping_list: None,
             cash: 200,
             cash_quota: 200,
             in_building: false,
