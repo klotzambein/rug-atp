@@ -124,7 +124,7 @@ impl Market {
     pub fn total_price(&self, meals: &PerResource<u32>) -> u32 {
         let mut sum: u32 = 0;
         for r_item in ResourceItem::iterator() {
-            sum += self.market_price[*r_item];
+            sum += self.market_price[*r_item] * meals[*r_item];
         }
 
         sum

@@ -90,6 +90,10 @@ impl ResourceItem {
                 let (projected_price, _) = market.market_price(ResourceItem::from_index(i));
                 let projected_energy = (agent.nutrition[i]) as f32;
 
+                if projected_price == 0 {
+                    continue;
+                }
+
                 let benefit: f32 = projected_energy / (projected_price as f32);
 
                 if benefit > max {
@@ -183,6 +187,15 @@ impl<T> PerResource<T> {
             meat: f(&self.meat, &other.meat),
         }
     }
+
+    // pub fn empty(&self) -> bool {
+    //     if self.wheat == T::default() && 
+    //     self.berry == T::default() && 
+    //     self.fish == T::default() && 
+    //     self.meat == T::default() {
+
+    //     }
+    // }
 }
 
 impl<T> std::ops::Index<ResourceItem> for PerResource<T> {

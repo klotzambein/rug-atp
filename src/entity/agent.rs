@@ -15,6 +15,8 @@ use super::{
     Entity, EntityId, EntityType,
 };
 
+use std::cmp::min;
+
 #[derive(Debug, Clone, Hash)]
 pub struct Agent {
     /// This contains the agents job, and all variables associated with said
@@ -93,13 +95,23 @@ impl Agent {
             },
             AgentState::BeHome => {
                 if self.energy < 5000 {
-                    let mut items = self.nutrition.iter().collect::<Vec<_>>();
+                    if let Some(_meal_plan) = &self.meal_plan {
+                        for r in ResourceItem::iterator() {
+                            if _meal_plan[*r] > 0 && self.inventory[*r] > 0 {
+                                let quantity: u32 = min(_meal_plan[*r], self.inventory[*r]);
+                                return AgentAction::Consume(*r, quantity);
+                            }
+                        }
+                        self.meal_plan = None;
+                    }
+
+                    /*let mut items = self.nutrition.iter().collect::<Vec<_>>();
                     items.sort_by_key(|i| i.1);
                     for (r, n) in items {
                         if *n > 40 && self.inventory[r] > 0 {
                             return AgentAction::Consume(r);
                         }
-                    }
+                    }*/
                 }
                 if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world)) {
                     // TODO: Make an informed choice
@@ -135,18 +147,31 @@ impl Agent {
                 }
             }
             AgentState::TradeOnMarket => {
-                if self.energy < 1000 || world.time_of_day() > 150 {
-                    if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world))
-                    {
+
+                // TODO Robin I made it work with the Option<AgentAction> Take a look at it and fix it
+                // if it's wrong
+                if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world))
+                {
+                    if self.energy < 1000 || world.time_of_day() > 150 {
+                    
                         // TODO: Maybe go straight to work
                         self.state = AgentState::GoHome;
                         AgentAction::Leave(p)
-                    } else {
-                        AgentAction::None
+                    }     
+                    else {
+                        if let Some(_action) = self.trade_on_market(pos, world) {
+                            _action
+                        }
+                        else { 
+                            self.state = AgentState::GoHome;
+                            AgentAction::Leave(p)
+                        }
                     }
-                } else {
-                    self.trade_on_market(pos, world)
+                } 
+                else {
+                    AgentAction::None
                 }
+
             }
         }
     }
@@ -254,11 +279,11 @@ impl Agent {
             // Calculating the energy gained by a single unit of that item
             // and the needed amount to fulfill the quota
             let unit_energy = self.nutrition[*r_item] as u32;
+            if unit_energy == 0 {
+                continue;
+            }
             let needed_amount: u32 = needed_energy / unit_energy
-                + match needed_energy % unit_energy == 0 {
-                    true => 0,
-                    false => 1,
-                };
+                + ((needed_energy % unit_energy != 0) as u32 );
 
             // If the market or the inventory has more than the needed amount,
             // we can buy it and the agent doesn't need anything else in its mealing plan
@@ -271,7 +296,7 @@ impl Agent {
             // If the market does not have enough of the resource available, the agent buys whatever
             // is available and  the loop keeps going on other, less cost-efficient resources
             to_ret[*r_item] = availability;
-            needed_energy -= needed_amount * unit_energy;
+            needed_energy = needed_energy.saturating_sub(needed_amount * unit_energy);
         }
         return Some(to_ret);
     }
@@ -297,7 +322,7 @@ impl Agent {
 
         // Update the cash quota with respect to the greed
         let desired_profit: f32 = (self.greed as f32) / 100.0;
-        self.cash_quota = ((self.cash as f32) * desired_profit) as u32;
+        self.cash_quota = self.cash + ((self.cash as f32) * desired_profit) as u32;
     }
 
     fn make_shopping_list(&self, meal_plan: &Option<PerResource<u32>>) -> Option<PerResource<u32>> {
@@ -325,15 +350,18 @@ impl Agent {
         }
     }
 
-    fn modify_shopping_item(&mut self, r_item: ResourceItem, amount: u32) {}
+    //fn modify_shopping_item(&mut self, r_item: ResourceItem, amount: u32) {}
 
-    pub fn trade_on_market(&mut self, _pos: Pos, world: &World) -> AgentAction {
+    pub fn trade_on_market(&mut self, _pos: Pos, world: &World) -> Option<AgentAction> {
         // If a shopping list is not constructed and the energy is below the quota, it constructs it
         // TODO update for multiple markets
         let market: &Market = &world.market;
 
         if let None = self.meal_plan {
             self.meal_plan = self.make_mealing_plan(market);
+        }
+
+        if let None = self.shopping_list {
             self.shopping_list = self.make_shopping_list(&self.meal_plan);
         }
 
@@ -348,43 +376,44 @@ impl Agent {
             Job::Explorer { .. } => None,
         };
 
-        // // If the agent is not an explorer, they will sell everything they don't need from their resources
-        // if let Some(r_item) = item_sell {
-        //     let excess: u32 = match &self.meal_plan {
-        //         Some(_meal_plan) => {
-        //             if self.inventory[r_item] > _meal_plan[r_item] {
-        //                 self.inventory[r_item] - _meal_plan[r_item]
-        //             } else {
-        //                 0
-        //             }
-        //         }
-        //         None => 0,
-        //     };
+        // If the agent is not an explorer, they will sell everything they don't need from their resources
+        if let Some(r_item) = item_sell {
+            let excess: u32 = match &self.meal_plan {
+                Some(_meal_plan) => {
+                    if self.inventory[r_item] > _meal_plan[r_item] {
+                        self.inventory[r_item] - _meal_plan[r_item]
+                    } else {
+                        0
+                    }
+                }
+                None => 0,
+            };
 
-        //     // It needs to calculate the total money spent on shopping
-        //     let total_price: u32 = match &self.shopping_list {
-        //         Some(_shopping_list) => market.total_price(_shopping_list),
-        //         None => 0,
-        //     };
+            // It needs to calculate the total money spent on shopping
+            let total_price: u32 = match &self.shopping_list {
+                Some(_shopping_list) => market.total_price(_shopping_list),
+                None => 0,
+            };
 
-        //     // After it has calculated the excess, it has to calculate the price needed to fulfill the quota
-        //     let balance_after_purchase: u32 = if self.cash > total_price {
-        //         self.cash - total_price
-        //     } else {
-        //         0
-        //     };
+            // After it has calculated the excess, it has to calculate the price needed to fulfill the quota
+            let balance_after_purchase: u32 = if self.cash > total_price {
+                self.cash - total_price
+            } else {
+                0
+            };
 
-        //     // insufficiency = 30   balance = 10 price = 3
-        //     let insufficiency = self.cash_quota - balance_after_purchase;
-        //     let price = insufficiency / excess + (insufficiency % excess != 0) as u32;
-
-        //     // Finally it puts the order on the action list
-        //     return AgentAction::MarketOrder {
-        //         item: r_item,
-        //         price: price,
-        //         amount: excess,
-        //     };
-        // }
+            // insufficiency = 30   balance = 10 price = 3
+            let insufficiency = self.cash_quota.saturating_sub(balance_after_purchase);
+            if excess > 0 && insufficiency > 0 {
+                let price = insufficiency / excess + (insufficiency % excess != 0) as u32;
+                // Finally it puts the order on the action list
+                return Some(AgentAction::MarketOrder {
+                    item: r_item,
+                    price: price,
+                    amount: excess,
+                });
+            }
+        }
 
         // If the agent does not have enough money to fulfill their energy
         // quota, they will continuously try to buy stuff they can't afford
@@ -421,9 +450,16 @@ impl Agent {
             if let Some(r_item) = purchased_item {
                 list[r_item] = 0;
             }
+            // If there was no item for purchase, the shopping list would be empty
+            else {
+                self.shopping_list = None;
+            }
         }
 
-        AgentAction::None
+        match action {
+            AgentAction::None => None,
+            _ => Some(action)
+        }
     }
 
     pub fn find(
@@ -517,18 +553,21 @@ impl Agent {
         self.inventory[resource] += amount;
     }
 
-    pub fn consume(&mut self, resource: ResourceItem) {
+    pub fn consume(&mut self, resource: ResourceItem, quantity: u32) {
         assert!(self.inventory[resource] > 0);
-        self.inventory[resource] -= 1;
-        self.energy += self.nutrition[resource] as u32;
+        self.inventory[resource] = self.inventory[resource].saturating_sub(quantity);
+        self.energy += (self.nutrition[resource] as u32) * quantity;
         if self.energy > 10000 {
             self.energy = 10000;
         }
+        const NUTRITION_SUB: u8 = 9;
+        const NUTRITION_ADD: u8 = 4;
+        // TODO Robin - check if the conversions from u32 to u8 are safe
         for (r, n) in self.nutrition.iter_mut() {
             if r == resource {
-                *n = n.saturating_sub(9);
+                *n = n.saturating_sub(NUTRITION_SUB.saturating_mul(quantity as u8));
             } else {
-                *n = n.saturating_add(4);
+                *n = n.saturating_add(NUTRITION_ADD.saturating_mul(quantity as u8));
             }
         }
     }
@@ -541,7 +580,7 @@ impl Default for Agent {
             state: AgentState::DoJob,
             home: Pos::default(),
             nutrition: PerResource::new(100),
-            inventory: PerResource::new(0),
+            inventory: PerResource::new(10),
             energy: 5000,
             energy_quota: 5000,
             // TODO draw this from a normal distribution
@@ -581,7 +620,7 @@ pub enum AgentAction {
     EnterBoat(Pos),
     LeaveBoat(Pos),
     /// Consume a resource.
-    Consume(ResourceItem),
+    Consume(ResourceItem, u32),
     /// This is only valid if an agent is in a market. This action will create
     /// an order at the given price with the specified amount
     MarketOrder {

@@ -301,7 +301,7 @@ impl World {
                 // Modify agent entity
                 a.collect(resource_farmed, 1)
             }
-            AgentAction::Consume(r) => a.consume(r),
+            AgentAction::Consume(r, q) => a.consume(r, q),
             AgentAction::MarketOrder {
                 item,
                 price,
