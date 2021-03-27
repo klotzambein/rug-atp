@@ -353,6 +353,10 @@ impl World {
         self.tile_type(p).walkable() && self.entity_at(p).is_none()
     }
 
+    pub fn tile_is_water(&self, p: Pos) -> bool {
+        self.tile_type(p) == TileType::Water && self.entity_at(p).is_none()
+    }
+
     /// The days start at 0 and last 200 ticks.
     pub fn time_of_day(&self) -> u16 {
         (self.tick % 200) as u16

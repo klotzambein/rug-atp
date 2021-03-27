@@ -53,6 +53,9 @@ pub struct Agent {
     /// This is true when the agent is in a building. To check which building
     /// the agent is in look up the current position in the world.
     pub in_building: bool,
+    /// Check whether the agent is currently in a boat. Helps with deciding whether
+    /// the agent can move on water or on land.
+    pub in_boat: bool,
     /// If this is true the agent is dead.
     pub dead: bool,
 }
@@ -141,28 +144,46 @@ impl Agent {
             Job::Lumberer => self.find_and_farm(world, pos, ResourceItem::Berry),
             Job::Farmer => self.find_and_farm(world, pos, ResourceItem::Wheat),
             Job::Butcher => self.find_and_farm(world, pos, ResourceItem::Meat),
-            // Job::FisherBoat => self.find_and_farm(world, pos, ResourceItem::Fish),
+            Job::FisherBoat => self.find_and_farm(world, pos, ResourceItem::Fish),
             Job::Fisher => {
                 // First find a boat and enter it
-                // if !self.in_boat {
-                //     let next_action = self.find_and_farm(
-                //         world,
-                //         pos,
-                //         EntityType::Building(Building::Boat { agent: None }),
-                //     );
-                //     match next_action {
-                //         AgentAction::Enter(_) => {
-                //             self.job = Job::FisherBoat;
-                //             self.in_boat = true;
-                //             // find closest water tile
-                //             // move to water: idk how??
-                //             // only move on water now
+                if !self.in_boat {
+                    let target_pos = world.find_entity_around(pos, search_radius * search_radius, 
 
-                //             return next_action;
-                //         }
-                //     }
-                // }
-                AgentAction::None
+                    let pf = self.path_find(pos, target_pos, world);
+
+                    match pf {
+                        Ok(target) => {
+                            AgentAction::Enter(target);
+                            // Separate the next thing? can't return 2 types here
+                            self.job = Job::FisherBoat;
+                            self.in_boat = true;
+
+                            if let Some(p) = world.find_tile_around(pos, 15, |p| world.tile_is_water(p)) {
+                                // change move_function here.
+                                AgentAction::Move(p);
+                            } else {
+                                AgentAction:: None;
+                            }
+                        }
+                        Err(a) => a,
+                    }
+
+                    match next_action {
+                        AgentAction::Enter(_) => {
+                            self.job = Job::FisherBoat;
+                            self.in_boat = true;
+                            // find closest water tile
+                            // move to water: idk how??
+                            // only move on water now
+
+                            return next_action;
+                        }
+                    }
+                } else {
+                    self.job = Job::FisherBoat;
+                    AgentAction::None
+                }
             }
             Job::Explorer {
                 observations,
@@ -459,6 +480,7 @@ impl Agent {
         pos: Pos,
         target: Option<Pos>,
         world: &World,
+        // move_fun: F();
     ) -> Result<Pos, AgentAction> {
         let mut rng = rand::thread_rng();
         let unstuckifier = Bernoulli::new(0.75).unwrap();
@@ -470,6 +492,7 @@ impl Agent {
             if unstuckifier.sample(&mut rng) {
                 let move_dir = Direction::delta(pos, target, world);
                 let next_pos = (pos + move_dir).wrap(world);
+                // if move_fun(next_pos) {
                 if world.tile_is_walkable(next_pos) {
                     return Err(AgentAction::Move(next_pos));
                 }
