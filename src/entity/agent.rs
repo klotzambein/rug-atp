@@ -148,13 +148,12 @@ impl Agent {
             Job::Fisher => {
                 // First find a boat and enter it
                 if !self.in_boat {
-                    let target_pos = world.find_entity_around(pos, search_radius * search_radius, 
+                    let target_pos = world.find_entity_around(pos, 15 * 15, EntityType::Building(Building::Boat));
 
                     let pf = self.path_find(pos, target_pos, world);
 
                     match pf {
                         Ok(target) => {
-                            AgentAction::Enter(target);
                             // Separate the next thing? can't return 2 types here
                             self.job = Job::FisherBoat;
                             self.in_boat = true;
@@ -167,18 +166,6 @@ impl Agent {
                             }
                         }
                         Err(a) => a,
-                    }
-
-                    match next_action {
-                        AgentAction::Enter(_) => {
-                            self.job = Job::FisherBoat;
-                            self.in_boat = true;
-                            // find closest water tile
-                            // move to water: idk how??
-                            // only move on water now
-
-                            return next_action;
-                        }
                     }
                 } else {
                     self.job = Job::FisherBoat;
