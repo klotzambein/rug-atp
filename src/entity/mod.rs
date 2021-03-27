@@ -55,7 +55,9 @@ impl Entity {
     pub fn texture(&self) -> i32 {
         match &self.ty {
             EntityType::Agent(a) => {
-                if matches!(a.state, AgentState::DoJob) {
+                if matches!(a.state, AgentState::DoJob)
+                    || matches!(a.job, agent::Job::Fisher { boat: Some(_) })
+                {
                     a.job.texture()
                 } else {
                     a.home.x.rem_euclid(8) as i32
@@ -63,8 +65,7 @@ impl Entity {
             }
             EntityType::Building(Building::Market) => 56,
             EntityType::Building(Building::Hut { .. }) => 57,
-            EntityType::Building(Building::Boat { agent: None }) => 49,
-            EntityType::Building(Building::Boat { agent: Some(_) }) => 48,
+            EntityType::Building(Building::Boat { .. }) => 49,
             // TODO IVO: Add the texture indices here. This refers to a texture
             // in assets/characters.png. The indices start at the top left going
             // to the right.
@@ -81,6 +82,7 @@ impl Entity {
             EntityType::Agent(Agent {
                 in_building, dead, ..
             }) => !(in_building || dead),
+            EntityType::Building(Building::Boat { has_agent }) => !has_agent,
             _ => true,
         }
     }

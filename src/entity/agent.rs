@@ -6,13 +6,13 @@ use rand::{
     Rng,
 };
 
-use crate::market::Market;
 use crate::world::{Pos, World};
+use crate::{market::Market, tile::TileType};
 
 use super::{
     building::Building,
     resources::{PerResource, ResourceItem},
-    Entity, EntityType,
+    Entity, EntityId, EntityType,
 };
 
 #[derive(Debug, Clone, Hash)]
@@ -53,9 +53,6 @@ pub struct Agent {
     /// This is true when the agent is in a building. To check which building
     /// the agent is in look up the current position in the world.
     pub in_building: bool,
-    /// Check whether the agent is currently in a boat. Helps with deciding whether
-    /// the agent can move on water or on land.
-    pub in_boat: bool,
     /// If this is true the agent is dead.
     pub dead: bool,
 }
@@ -78,7 +75,21 @@ impl Agent {
                     self.update_quotas();
                     AgentAction::Enter(h)
                 }
-                Err(a) => a,
+                Err(a) => {
+                    if world.tile_type(pos) == TileType::Sand
+                        && matches!(self.job, Job::Fisher { boat: Some(_) })
+                    {
+                        if let Some(p) =
+                            world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p))
+                        {
+                            AgentAction::LeaveBoat(p)
+                        } else {
+                            AgentAction::None
+                        }
+                    } else {
+                        a
+                    }
+                }
             },
             AgentState::BeHome => {
                 if self.energy < 5000 {
@@ -90,7 +101,7 @@ impl Agent {
                         }
                     }
                 }
-                if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
+                if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world)) {
                     // TODO: Make an informed choice
                     if random() {
                         self.state = AgentState::DoJob;
@@ -124,8 +135,9 @@ impl Agent {
                 }
             }
             AgentState::TradeOnMarket => {
-                if self.energy < 1000 {
-                    if let Some(p) = world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p)) {
+                if self.energy < 1000 || world.time_of_day() > 150 {
+                    if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world))
+                    {
                         // TODO: Maybe go straight to work
                         self.state = AgentState::GoHome;
                         AgentAction::Leave(p)
@@ -144,32 +156,39 @@ impl Agent {
             Job::Lumberer => self.find_and_farm(world, pos, ResourceItem::Berry),
             Job::Farmer => self.find_and_farm(world, pos, ResourceItem::Wheat),
             Job::Butcher => self.find_and_farm(world, pos, ResourceItem::Meat),
-            Job::FisherBoat => self.find_and_farm(world, pos, ResourceItem::Fish),
-            Job::Fisher => {
-                // First find a boat and enter it
-                if !self.in_boat {
-                    let target_pos = world.find_entity_around(pos, 15 * 15, EntityType::Building(Building::Boat));
-
-                    let pf = self.path_find(pos, target_pos, world);
-
-                    match pf {
-                        Ok(target) => {
-                            // Separate the next thing? can't return 2 types here
-                            self.job = Job::FisherBoat;
-                            self.in_boat = true;
-
-                            if let Some(p) = world.find_tile_around(pos, 15, |p| world.tile_is_water(p)) {
-                                // change move_function here.
-                                AgentAction::Move(p);
-                            } else {
-                                AgentAction:: None;
-                            }
-                        }
-                        Err(a) => a,
+            Job::Fisher { boat } => {
+                if boat.is_some() {
+                    // if on sand: go water
+                    if let TileType::Sand = world.tile_type(pos) {
+                        let target = world.find_tile_around(pos, 15 * 15, |p| {
+                            world.tile_type(p) == TileType::Water
+                        });
+                        return self
+                            .path_find(pos, target, world)
+                            .map(|p| {
+                                if self.can_walk_on(p, world) {
+                                    AgentAction::Move(p)
+                                } else {
+                                    AgentAction::None
+                                }
+                            })
+                            .unwrap_or_else(|a| a);
+                    } else {
+                        // if on water
+                        return self.find_and_farm(world, pos, ResourceItem::Fish);
                     }
-                } else {
-                    self.job = Job::FisherBoat;
-                    AgentAction::None
+                }
+
+                // First find a boat and enter it
+                let target_pos = world.find_entity_around(pos, 15 * 15, |e| {
+                    matches!(e.ty, EntityType::Building(Building::Boat { .. }))
+                });
+
+                let pf = self.path_find(pos, target_pos, world);
+
+                match pf {
+                    Ok(p) => AgentAction::EnterBoat(p),
+                    Err(a) => a,
                 }
             }
             Job::Explorer {
@@ -202,7 +221,7 @@ impl Agent {
                     match best_item {
                         ResourceItem::Berry => self.job = Job::Lumberer,
                         ResourceItem::Wheat => self.job = Job::Farmer,
-                        ResourceItem::Fish => self.job = Job::Fisher,
+                        ResourceItem::Fish => self.job = Job::Fisher { boat: None },
                         ResourceItem::Meat => self.job = Job::Butcher,
                     }
                 }
@@ -211,7 +230,7 @@ impl Agent {
 
                 let target = (pos + dir).wrap(world);
 
-                if world.tile_is_walkable(target) {
+                if self.can_walk_on(target, world) {
                     AgentAction::Move(target)
                 } else {
                     AgentAction::None
@@ -301,20 +320,14 @@ impl Agent {
                 return None;
             }
             return Some(to_ret);
-        }
-
-        else {
+        } else {
             return None;
         }
-        
     }
 
-    fn modify_shopping_item(&mut self, r_item: ResourceItem, amount: u32) {
-
-    }
+    fn modify_shopping_item(&mut self, r_item: ResourceItem, amount: u32) {}
 
     pub fn trade_on_market(&mut self, _pos: Pos, world: &World) -> AgentAction {
-
         // If a shopping list is not constructed and the energy is below the quota, it constructs it
         // TODO update for multiple markets
         let market: &Market = &world.market;
@@ -331,51 +344,47 @@ impl Agent {
             Job::Butcher => Some(ResourceItem::Meat),
             Job::Farmer => Some(ResourceItem::Wheat),
             Job::Lumberer => Some(ResourceItem::Berry),
-            Job::Fisher => Some(ResourceItem::Fish),
-            Job::Explorer{ .. } => None
+            Job::Fisher { .. } => Some(ResourceItem::Fish),
+            Job::Explorer { .. } => None,
         };
 
-        // If the agent is not an explorer, they will sell everything they don't need from their resources
-        if let Some(r_item) = item_sell {
-            let excess: u32 = match &self.meal_plan {
-                Some(_meal_plan) => 
-                    if self.inventory[r_item] > _meal_plan[r_item] {
-                        self.inventory[r_item] - _meal_plan[r_item]
-                    } else {
-                        0
-                    },
-                None => 0
-            };
+        // // If the agent is not an explorer, they will sell everything they don't need from their resources
+        // if let Some(r_item) = item_sell {
+        //     let excess: u32 = match &self.meal_plan {
+        //         Some(_meal_plan) => {
+        //             if self.inventory[r_item] > _meal_plan[r_item] {
+        //                 self.inventory[r_item] - _meal_plan[r_item]
+        //             } else {
+        //                 0
+        //             }
+        //         }
+        //         None => 0,
+        //     };
 
-            
-            // It needs to calculate the total money spent on shopping
-            let total_price: u32 = match &self.shopping_list {
-                Some(_shopping_list) => market.total_price(_shopping_list),
-                None => 0,
-            };
-            
-            // After it has calculated the excess, it has to calculate the price needed to fulfill the quota
-            let balance_after_purchase: u32 = 
-                if self.cash > total_price {
-                    self.cash - total_price
-                }
-                else {
-                    0
-                };
-            
-            // insufficiency = 30   balance = 10 price = 3
-            let insufficiency = self.cash_quota - balance_after_purchase;
-            let _price = insufficiency / excess + 
-                (insufficiency % excess != 0) as u32;
+        //     // It needs to calculate the total money spent on shopping
+        //     let total_price: u32 = match &self.shopping_list {
+        //         Some(_shopping_list) => market.total_price(_shopping_list),
+        //         None => 0,
+        //     };
 
-            // Finally it puts the order on the action list
-            return AgentAction::MarketOrder {
-                item: r_item,
-                price: _price,
-                amount: excess,
-            };
-        }
+        //     // After it has calculated the excess, it has to calculate the price needed to fulfill the quota
+        //     let balance_after_purchase: u32 = if self.cash > total_price {
+        //         self.cash - total_price
+        //     } else {
+        //         0
+        //     };
 
+        //     // insufficiency = 30   balance = 10 price = 3
+        //     let insufficiency = self.cash_quota - balance_after_purchase;
+        //     let price = insufficiency / excess + (insufficiency % excess != 0) as u32;
+
+        //     // Finally it puts the order on the action list
+        //     return AgentAction::MarketOrder {
+        //         item: r_item,
+        //         price: price,
+        //         amount: excess,
+        //     };
+        // }
 
         // If the agent does not have enough money to fulfill their energy
         // quota, they will continuously try to buy stuff they can't afford
@@ -395,7 +404,7 @@ impl Agent {
                     item: *r_item,
                     amount: s_list[*r_item],
                 };
-            }        
+            }
         }
 
         // Remove the purchased item from the shopping list before returning
@@ -406,15 +415,13 @@ impl Agent {
 
         // If you want to try and fix this, what I want this code to do is set the amount of purchased_item
         // in self.shopping_plan to 0
-        let mut shopping_list_copy = self.shopping_list.clone();
+        // let mut shopping_list_copy = self.shopping_list.clone();
 
-        if let Some(mut _list) = shopping_list_copy {
+        if let Some(list) = &mut self.shopping_list {
             if let Some(r_item) = purchased_item {
-                _list[r_item] = 0;
+                list[r_item] = 0;
             }
         }
-        
-        self.shopping_list = shopping_list_copy;
 
         AgentAction::None
     }
@@ -467,7 +474,6 @@ impl Agent {
         pos: Pos,
         target: Option<Pos>,
         world: &World,
-        // move_fun: F();
     ) -> Result<Pos, AgentAction> {
         let mut rng = rand::thread_rng();
         let unstuckifier = Bernoulli::new(0.75).unwrap();
@@ -479,8 +485,7 @@ impl Agent {
             if unstuckifier.sample(&mut rng) {
                 let move_dir = Direction::delta(pos, target, world);
                 let next_pos = (pos + move_dir).wrap(world);
-                // if move_fun(next_pos) {
-                if world.tile_is_walkable(next_pos) {
+                if self.can_walk_on(next_pos, world) {
                     return Err(AgentAction::Move(next_pos));
                 }
             }
@@ -490,12 +495,20 @@ impl Agent {
             .neighbors(pos)
             .iter()
             .cloned()
-            .filter(|p| world.tile_is_walkable(*p))
+            .filter(|p| self.can_walk_on(*p, world))
             .choose(&mut rng);
 
         match next {
             Some(n) => Err(AgentAction::Move(n)),
             None => Err(AgentAction::None),
+        }
+    }
+
+    pub fn can_walk_on(&mut self, pos: Pos, world: &World) -> bool {
+        if let Job::Fisher { boat: Some(_) } = self.job {
+            world.tile_is_sailable(pos)
+        } else {
+            world.tile_is_walkable(pos)
         }
     }
 
@@ -565,6 +578,8 @@ pub enum AgentAction {
     Enter(Pos),
     /// Leave a building and go to pos
     Leave(Pos),
+    EnterBoat(Pos),
+    LeaveBoat(Pos),
     /// Consume a resource.
     Consume(ResourceItem),
     /// This is only valid if an agent is in a market. This action will create
@@ -576,13 +591,16 @@ pub enum AgentAction {
     },
     /// This is only valid if an agent is in a market. This action will purchase
     /// the given item at the cheapest market price.
-    MarketPurchase { item: ResourceItem, amount: u32 },
+    MarketPurchase {
+        item: ResourceItem,
+        amount: u32,
+    },
     /// Die: remove this agent from this agent from the world and set its dead
     /// flag to true.
     Die,
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Job {
     // None,
     Explorer {
@@ -591,8 +609,9 @@ pub enum Job {
     },
     Farmer,
     Lumberer,
-    Fisher,
-    // FisherBoat,
+    Fisher {
+        boat: Option<EntityId>,
+    },
     Butcher,
     // Miner,
     // CompanyMember(CompanyId),
@@ -606,8 +625,8 @@ impl Job {
             // Job::Miner => 2,
             Job::Farmer => 10,
             Job::Explorer { .. } => 11,
-            Job::Fisher => 12,
-            // Job::FisherBoat => 51,
+            Job::Fisher { boat: None } => 12,
+            Job::Fisher { boat: Some(_) } => 51,
             Job::Butcher => 13,
             Job::Lumberer => 15,
         }
@@ -622,7 +641,7 @@ impl Default for Job {
 
 impl Distribution<Job> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Job {
-        match rng.gen_range(0..4) {
+        match rng.gen_range(0..=4) {
             0 => Job::Explorer {
                 observations: Default::default(),
                 count: 0,
@@ -630,7 +649,7 @@ impl Distribution<Job> for Standard {
             1 => Job::Farmer,
             2 => Job::Butcher,
             3 => Job::Lumberer,
-            // 4 => Job::Fisher,
+            4 => Job::Fisher { boat: None },
             _ => unreachable!(),
         }
     }

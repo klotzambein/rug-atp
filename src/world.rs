@@ -3,12 +3,12 @@ use glium::Display;
 use rand::Rng;
 
 use crate::{
+    entity::{agent::Job, resources::PerResource, Entity, EntityId, EntityType},
     entity::{
         agent::{Agent, AgentAction},
         building::Building,
         resources::Resource,
     },
-    entity::{resources::PerResource, Entity, EntityId, EntityType},
     generation::BiomeMap,
     grid::CanvasGrid,
     market::Market,
@@ -189,7 +189,7 @@ impl World {
         match a.step(*pos, &self) {
             AgentAction::Move(p) => {
                 assert!(!a.in_building);
-                assert!(self.tile_is_walkable(p));
+                assert!(a.can_walk_on(p, self), "{:#?}", a);
                 let idx = self.idx(p);
                 self.tiles_entity[current_tile_idx] = None;
                 self.tiles_entity[idx] = Some(id);
@@ -197,7 +197,7 @@ impl World {
             }
             AgentAction::Leave(p) => {
                 assert!(a.in_building);
-                assert!(self.tile_is_walkable(p));
+                assert!(a.can_walk_on(p, self), "{:#?}", a);
 
                 // Modify agent entity
                 a.in_building = false;
@@ -234,6 +234,57 @@ impl World {
                     b.agent_enter(id);
                 } else {
                     panic!("Not a building");
+                }
+            }
+            AgentAction::EnterBoat(p) => {
+                assert!(!a.in_building);
+
+                // Clear source tile entity
+                self.tiles_entity[current_tile_idx] = None;
+
+                // Modify building
+                let idx = self.idx(p);
+                let boat_entity_id = self.tiles_entity[idx].unwrap();
+                let boat_entity = &mut self.entities[boat_entity_id.as_index()];
+                if let EntityType::Building(Building::Boat { has_agent }) = &mut boat_entity.ty {
+                    *has_agent = true;
+                } else {
+                    panic!("Not a boat");
+                }
+                self.tiles_entity[idx] = Some(id);
+
+                // Modify agent entity
+                *pos = p;
+                if let Job::Fisher { boat } = &mut a.job {
+                    assert!(boat.is_none());
+                    *boat = Some(boat_entity_id);
+                } else {
+                    panic!("Not a fisher")
+                }
+            }
+            AgentAction::LeaveBoat(p) => {
+                assert!(!a.in_building);
+
+                if let Job::Fisher { boat } = &mut a.job {
+                    let b_id = boat.unwrap();
+
+                    // Modify building
+                    let boat_entity = &mut self.entities[b_id.as_index()];
+                    if let EntityType::Building(Building::Boat { has_agent }) =
+                        &mut boat_entity.ty
+                    {
+                        *has_agent = false;
+                    } else {
+                        panic!("Not a boat");
+                    }
+                    boat_entity.pos = *pos;
+                    self.tiles_entity[current_tile_idx] = Some(b_id);
+
+                    // Modify agent entity
+                    *pos = p;
+                    *boat = None;
+                } else {
+                    panic!("Not a fisher")
                 }
             }
             AgentAction::Farm(p) => {
@@ -353,8 +404,9 @@ impl World {
         self.tile_type(p).walkable() && self.entity_at(p).is_none()
     }
 
-    pub fn tile_is_water(&self, p: Pos) -> bool {
-        self.tile_type(p) == TileType::Water && self.entity_at(p).is_none()
+    pub fn tile_is_sailable(&self, p: Pos) -> bool {
+        let typ = self.tile_type(p);
+        (typ == TileType::Water || typ == TileType::Sand) && self.entity_at(p).is_none()
     }
 
     /// The days start at 0 and last 200 ticks.

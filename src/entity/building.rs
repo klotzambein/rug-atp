@@ -6,7 +6,7 @@ use super::{agent::Agent, Entity, EntityId, EntityType};
 pub enum Building {
     Market,
     Hut { is_agent_in: bool, agent: EntityId },
-    Boat { agent: Option<EntityId> },
+    Boat { has_agent: bool },
 }
 
 impl Building {
@@ -45,9 +45,8 @@ impl Building {
                 assert_eq!(*agent, id);
                 *is_agent_in = true;
             }
-            Building::Boat { agent } => {
-                assert!(agent.is_none());
-                *agent = Some(id);
+            Building::Boat { .. } => {
+                panic!("Use EnterBoat action to enter a boat!");
             }
         }
     }
@@ -58,8 +57,8 @@ impl Building {
             Building::Hut { is_agent_in, .. } => {
                 *is_agent_in = false;
             }
-            Building::Boat { agent } => {
-                *agent = None;
+            Building::Boat { .. } => {
+                panic!("Use LeaveBoat action to leave a boat!");
             }
         }
     }

@@ -191,7 +191,7 @@ impl TileDistribution {
                 (TileType::SandTreeDead, None),
                 (
                     TileType::Sand,
-                    Some(EntityType::Building(Building::Boat { agent: None })),
+                    Some(EntityType::Building(Building::Boat { has_agent: false })),
                 ),
             ],
             weights: WeightedIndex::new(&[1000, 20, 5, 15]).unwrap(),

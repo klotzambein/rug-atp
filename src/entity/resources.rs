@@ -126,7 +126,7 @@ impl ResourceItem {
     }
 }
 
-#[derive(Debug, Clone, Hash, Default)]
+#[derive(Debug, Clone, Hash, Default, PartialEq, Eq)]
 pub struct PerResource<T> {
     pub wheat: T,
     pub berry: T,
