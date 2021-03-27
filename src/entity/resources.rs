@@ -8,55 +8,40 @@ use std::slice::Iter;
 
 // TODO IVO: here is where resources are defined
 #[derive(Debug, Clone, Hash, PartialEq)]
-pub enum Resource {
-    Wheat(u8),
-    Berry(u8),
-    Fish(u8),
-    Meat(u8),
+pub struct Resource {
+    pub amount: u16,
+    pub timeout: u16,
+    pub resource: ResourceItem,
 }
 
 impl Resource {
-    pub fn farm(&mut self) -> ResourceItem {
-        match self {
-            Resource::Wheat(amount) => {
-                *amount = amount.saturating_sub(1);
-                ResourceItem::Wheat
-            }
-            Resource::Berry(amount) => {
-                *amount = amount.saturating_sub(1);
-                ResourceItem::Berry
-            }
-            Resource::Fish(amount) => {
-                *amount = amount.saturating_sub(1);
-                ResourceItem::Fish
-            }
-            Resource::Meat(amount) => {
-                *amount = amount.saturating_sub(1);
-                ResourceItem::Meat
-            }
+    pub fn new(resource: ResourceItem, amount: u16) -> Resource {
+        Resource {
+            amount,
+            resource,
+            timeout: 0,
+        }
+    }
+
+    pub fn farm(&mut self) -> Option<ResourceItem> {
+        if self.amount > 0 {
+            self.amount = self.amount.saturating_sub(1);
+            return Some(self.resource);
+        } else {
+            return None;
         }
     }
 
     pub fn product(&self) -> ResourceItem {
-        match self {
-            Resource::Wheat(_) => ResourceItem::Wheat,
-            Resource::Berry(_) => ResourceItem::Berry,
-            Resource::Fish(_) => ResourceItem::Fish,
-            Resource::Meat(_) => ResourceItem::Meat,
-        }
+        return self.resource;
     }
 
     pub fn produces_item(&self, item: ResourceItem) -> bool {
         self.product() == item
     }
 
-    pub fn available(&self) -> u8 {
-        match self {
-            Resource::Wheat(n) => *n,
-            Resource::Berry(n) => *n,
-            Resource::Fish(n) => *n,
-            Resource::Meat(n) => *n,
-        }
+    pub fn available(&self) -> u16 {
+        self.amount
     }
 }
 
@@ -82,19 +67,16 @@ impl ResourceItem {
     pub fn sort_by_benefit(items: &mut [ResourceItem; 4], agent: &Agent, market: &Market) {
         // Sort (direct selection) the array by the benefit
         // (given by the accumulated energy over the cost)
-        for i in 1..4 {
+
+        for i in 0..4 {
             let mut max_ind: u8 = 0;
             let mut max: f32 = 0.0;
 
             for j in i..4 {
-                let (projected_price, _) = market.market_price(ResourceItem::from_index(i));
-                let projected_energy = (agent.nutrition[i]) as f32;
+                let (projected_price, _) = market.market_price(ResourceItem::from_index(j));
+                let projected_energy = (agent.nutrition[j]) as f32;
 
-                if projected_price == 0 {
-                    continue;
-                }
-
-                let benefit: f32 = projected_energy / (projected_price as f32);
+                let benefit: f32 = projected_energy / projected_price as f32;
 
                 if benefit > max {
                     max = benefit;
@@ -125,7 +107,10 @@ impl ResourceItem {
             1 => ResourceItem::Berry,
             2 => ResourceItem::Fish,
             3 => ResourceItem::Meat,
-            _ => panic!("Index {} out of bounds when trying to access a ResourceItem", index),
+            _ => panic!(
+                "Index {} out of bounds when trying to access a ResourceItem",
+                index
+            ),
         }
     }
 }
@@ -189,9 +174,9 @@ impl<T> PerResource<T> {
     }
 
     // pub fn empty(&self) -> bool {
-    //     if self.wheat == T::default() && 
-    //     self.berry == T::default() && 
-    //     self.fish == T::default() && 
+    //     if self.wheat == T::default() &&
+    //     self.berry == T::default() &&
+    //     self.fish == T::default() &&
     //     self.meat == T::default() {
 
     //     }
@@ -231,7 +216,10 @@ impl<T> std::ops::Index<u8> for PerResource<T> {
             1 => &self.berry,
             2 => &self.fish,
             3 => &self.meat,
-            _ => panic!("Index {} out of bounds when trying to access a ResourceItem", index),
+            _ => panic!(
+                "Index {} out of bounds when trying to access a ResourceItem",
+                index
+            ),
         }
     }
 }
@@ -243,7 +231,10 @@ impl<T> std::ops::IndexMut<u8> for PerResource<T> {
             1 => &mut self.berry,
             2 => &mut self.fish,
             3 => &mut self.meat,
-            _ => panic!("Index {} out of bounds when trying to access a ResourceItem", index),
+            _ => panic!(
+                "Index {} out of bounds when trying to access a ResourceItem",
+                index
+            ),
         }
     }
 }

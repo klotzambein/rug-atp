@@ -7,10 +7,10 @@ pub mod entity;
 pub mod generation;
 pub mod grid;
 pub mod market;
+pub mod statistics;
 pub mod tile;
 pub mod ui;
 pub mod world;
-pub mod statistics;
 
 use grid::CanvasGrid;
 use statistics::Statistics;

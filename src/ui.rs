@@ -50,7 +50,7 @@ impl UI {
         let ui = imgui.context.frame();
 
         // Here goes the code that describes the GUI
-        ui.show_demo_window(&mut true);
+        // ui.show_demo_window(&mut true);
         self.window_inspector(&ui, world);
         self.window_market(&ui, world);
         self.window_stepper(&ui, world, tps);
@@ -120,8 +120,15 @@ impl UI {
                     .prices()
                     .map(|p| p.map(|p| p as f32).unwrap_or(f32::NAN));
                 ui.text(&format!("Prices: {:#?}", prices));
+                ui.text(&format!("M-Prices: {:#?}", world.market.market_price));
+                ui.text(&format!("M-Demand: {:#?}", world.market.market_demand));
                 for (r, p) in self.stats.borrow().prices.iter() {
                     PlotLines::new(ui, &im_str!("Price {:?}", r), p.as_ref())
+                        .graph_size([0., 50.])
+                        .build();
+                }
+                for (r, v) in self.stats.borrow().volume.iter() {
+                    PlotLines::new(ui, &im_str!("Volume {:?}", r), v.as_ref())
                         .graph_size([0., 50.])
                         .build();
                 }

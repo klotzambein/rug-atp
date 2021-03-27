@@ -270,8 +270,7 @@ impl World {
 
                     // Modify building
                     let boat_entity = &mut self.entities[b_id.as_index()];
-                    if let EntityType::Building(Building::Boat { has_agent }) =
-                        &mut boat_entity.ty
+                    if let EntityType::Building(Building::Boat { has_agent }) = &mut boat_entity.ty
                     {
                         *has_agent = false;
                     } else {
@@ -299,7 +298,9 @@ impl World {
                 };
 
                 // Modify agent entity
-                a.collect(resource_farmed, 1)
+                if let Some(resource) = resource_farmed {
+                    a.collect(resource, 1)
+                }
             }
             AgentAction::Consume(r, q) => a.consume(r, q),
             AgentAction::MarketOrder {
@@ -349,9 +350,24 @@ impl World {
         }
     }
 
-    fn step_resource(&mut self, _r: &Resource, pos: &mut Pos, _i: usize) {
-        let _current_tile_idx = self.idx(*pos);
+    fn step_resource(&mut self, r: &mut Resource, pos: &mut Pos, idx: usize) {
+        let current_tile_idx = self.idx(*pos);
         // TODO IVO: This is called for every resource every tick
+        // To remove
+        // after 15 days
+        // to respawn
+        if r.available() == 0 {
+            if r.timeout == 0 {
+                r.timeout = 200 * 15;
+                self.tiles_entity[current_tile_idx] = None;
+            } else if r.timeout == 1 {
+                self.tiles_entity[current_tile_idx] = Some(EntityId::new(idx));
+                r.timeout = 0;
+                r.amount = 255;
+            } else {
+                r.timeout -= 1;
+            }
+        }
     }
 
     fn step_building(&mut self, _b: &Building, pos: &mut Pos, _i: usize) {

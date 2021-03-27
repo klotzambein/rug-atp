@@ -52,6 +52,8 @@ pub struct Agent {
     pub cash: u32,
     // This is the cash that the agent needs to make
     pub cash_quota: u32,
+    // Used to change jobs if quota is not met.
+    pub timeout_quota: u16,
     /// This is true when the agent is in a building. To check which building
     /// the agent is in look up the current position in the world.
     pub in_building: bool,
@@ -60,6 +62,7 @@ pub struct Agent {
 }
 
 impl Agent {
+    // TODO: change jobs after a while if they don't reach their targets
     pub fn step(&mut self, pos: Pos, world: &World) -> AgentAction {
         if self.dead {
             return AgentAction::None;
@@ -68,6 +71,15 @@ impl Agent {
         self.energy = self.energy.saturating_sub(1);
         if self.energy == 0 {
             return AgentAction::Die;
+        }
+
+        self.timeout_quota = self.timeout_quota.saturating_sub(1);
+        if self.timeout_quota == 0 {
+            self.job = Job::Explorer {
+                count: 0,
+                observations: Default::default(),
+            };
+            self.timeout_quota = 200 * 10;
         }
 
         match self.state {
@@ -147,31 +159,19 @@ impl Agent {
                 }
             }
             AgentState::TradeOnMarket => {
-
-                // TODO Robin I made it work with the Option<AgentAction> Take a look at it and fix it
-                // if it's wrong
-                if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world))
-                {
-                    if self.energy < 1000 || world.time_of_day() > 150 {
-                    
-                        // TODO: Maybe go straight to work
-                        self.state = AgentState::GoHome;
-                        AgentAction::Leave(p)
-                    }     
-                    else {
-                        if let Some(_action) = self.trade_on_market(pos, world) {
-                            _action
-                        }
-                        else { 
-                            self.state = AgentState::GoHome;
-                            AgentAction::Leave(p)
-                        }
+                if self.energy > 1000 && world.time_of_day() < 150 {
+                    if let Some(action) = self.trade_on_market(pos, world) {
+                        return action;
                     }
-                } 
-                else {
+                }
+                // Leave the market
+                if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world)) {
+                    // TODO: Maybe go straight to work
+                    self.state = AgentState::GoHome;
+                    AgentAction::Leave(p)
+                } else {
                     AgentAction::None
                 }
-
             }
         }
     }
@@ -205,7 +205,7 @@ impl Agent {
                 }
 
                 // First find a boat and enter it
-                let target_pos = world.find_entity_around(pos, 15 * 15, |e| {
+                let target_pos = world.find_entity_around(pos, 20 * 20, |e| {
                     matches!(e.ty, EntityType::Building(Building::Boat { .. }))
                 });
 
@@ -282,8 +282,8 @@ impl Agent {
             if unit_energy == 0 {
                 continue;
             }
-            let needed_amount: u32 = needed_energy / unit_energy
-                + ((needed_energy % unit_energy != 0) as u32 );
+            let needed_amount: u32 =
+                needed_energy / unit_energy + ((needed_energy % unit_energy != 0) as u32);
 
             // If the market or the inventory has more than the needed amount,
             // we can buy it and the agent doesn't need anything else in its mealing plan
@@ -321,8 +321,14 @@ impl Agent {
         self.energy_quota = quota_f32.ceil() as u32;
 
         // Update the cash quota with respect to the greed
+        let old_cash_quota = self.cash_quota;
+
         let desired_profit: f32 = (self.greed as f32) / 100.0;
         self.cash_quota = self.cash + ((self.cash as f32) * desired_profit) as u32;
+
+        if old_cash_quota != self.cash_quota {
+            self.timeout_quota = 200 * 10;
+        }
     }
 
     fn make_shopping_list(&self, meal_plan: &Option<PerResource<u32>>) -> Option<PerResource<u32>> {
@@ -458,7 +464,7 @@ impl Agent {
 
         match action {
             AgentAction::None => None,
-            _ => Some(action)
+            _ => Some(action),
         }
     }
 
@@ -484,7 +490,7 @@ impl Agent {
 
         let target_pos = world.find_entity_around(pos, search_radius * search_radius, |e| {
             if let EntityType::Resource(r) = &e.ty {
-                r.produces_item(item)
+                r.produces_item(item) && r.available() > 0
             } else {
                 false
             }
@@ -562,12 +568,12 @@ impl Agent {
         }
         const NUTRITION_SUB: u8 = 9;
         const NUTRITION_ADD: u8 = 4;
-        // TODO Robin - check if the conversions from u32 to u8 are safe
+
         for (r, n) in self.nutrition.iter_mut() {
             if r == resource {
-                *n = n.saturating_sub(NUTRITION_SUB.saturating_mul(quantity as u8));
+                *n = n.saturating_sub(NUTRITION_SUB.saturating_mul(quantity.min(255) as u8));
             } else {
-                *n = n.saturating_add(NUTRITION_ADD.saturating_mul(quantity as u8));
+                *n = n.saturating_add(NUTRITION_ADD.saturating_mul(quantity.min(255) as u8));
             }
         }
     }
@@ -575,22 +581,24 @@ impl Agent {
 
 impl Default for Agent {
     fn default() -> Self {
+        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * 5.).max(0.) as u32;
         Agent {
             job: random(),
             state: AgentState::DoJob,
             home: Pos::default(),
             nutrition: PerResource::new(100),
-            inventory: PerResource::new(10),
+            inventory: PerResource::new(0),
             energy: 5000,
             energy_quota: 5000,
             // TODO draw this from a normal distribution
-            greed: 10,
+            greed,
             meal_plan: None,
             shopping_list: None,
             cash: 200,
             cash_quota: 200,
             in_building: false,
             dead: false,
+            timeout_quota: 200 * 20,
         }
     }
 }

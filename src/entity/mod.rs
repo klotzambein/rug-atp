@@ -12,7 +12,7 @@ use crate::world::Pos;
 use self::{
     agent::{Agent, AgentState},
     building::Building,
-    resources::Resource,
+    resources::{Resource, ResourceItem},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -69,10 +69,22 @@ impl Entity {
             // TODO IVO: Add the texture indices here. This refers to a texture
             // in assets/characters.png. The indices start at the top left going
             // to the right.
-            EntityType::Resource(Resource::Wheat(_)) => 32,
-            EntityType::Resource(Resource::Berry(_)) => 33,
-            EntityType::Resource(Resource::Meat(_)) => 40,
-            EntityType::Resource(Resource::Fish(_)) => 50,
+            EntityType::Resource(Resource {
+                resource: ResourceItem::Wheat,
+                ..
+            }) => 32,
+            EntityType::Resource(Resource {
+                resource: ResourceItem::Berry,
+                ..
+            }) => 33,
+            EntityType::Resource(Resource {
+                resource: ResourceItem::Meat,
+                ..
+            }) => 40,
+            EntityType::Resource(Resource {
+                resource: ResourceItem::Fish,
+                ..
+            }) => 50,
             // _ => unimplemented!(),
         }
     }
@@ -83,6 +95,7 @@ impl Entity {
                 in_building, dead, ..
             }) => !(in_building || dead),
             EntityType::Building(Building::Boat { has_agent }) => !has_agent,
+            EntityType::Resource(Resource { timeout, .. }) => timeout == 0,
             _ => true,
         }
     }

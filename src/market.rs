@@ -14,7 +14,11 @@ pub struct Market {
 }
 
 impl Market {
-    pub fn cache_prices(&mut self, _tick: u32) {
+    pub fn cache_prices(&mut self, tick: u32) {
+        if tick % 200 == 0 {
+            self.market_demand = Default::default();
+        }
+
         for (r, orders) in self.orders.iter_mut() {
             let market_price = self.market_price[r];
             orders.iter_mut().for_each(|o| o.cache_price(market_price));
@@ -28,14 +32,23 @@ impl Market {
 
     pub fn order(&mut self, agent: EntityId, item: ResourceItem, price: u32, amount: u32) {
         let orders = &mut self.orders[item];
-        let pos = orders.binary_search_by_key(&price, |o| o.cached_price).unwrap_or_else(|e| e);
-        orders.insert(pos, Order {
-            cached_price: price,
-            value: price,
-            amount,
-            agent,
-            expiration: DEFAULT_EXP,
-        });
+        let pos = orders
+            .binary_search_by_key(&price, |o| o.cached_price)
+            .unwrap_or_else(|e| e);
+        orders.insert(
+            pos,
+            Order {
+                cached_price: price,
+                value: price,
+                amount,
+                agent,
+                expiration: DEFAULT_EXP,
+            },
+        );
+    }
+
+    pub fn volume(&self) -> PerResource<u32> {
+        self.orders.map(|o| o.iter().map(|a| a.amount).sum())
     }
 
     // pub fn purchase(&mut self, item: ResourceItem) -> (EntityId, u32) {
@@ -51,10 +64,14 @@ impl Market {
     // }
 
     /// Private internal method that executes the purchase of the specific resource    
-    fn buy_resource(&mut self, resource: ResourceItem, amount: u32, cash_available: u32) -> (Vec<(EntityId, u32)>, u32) {
+    fn buy_resource(
+        &mut self,
+        resource: ResourceItem,
+        amount: u32,
+        cash_available: u32,
+    ) -> (Vec<(EntityId, u32)>, u32) {
         let mut sellers: Vec<(EntityId, u32)> = Vec::new();
-        
-        
+
         let orders: &mut Vec<Order> = &mut self.orders[resource];
         // Variables keeping track of the amount left to fulfill the buy order and accumulated price
         let mut am_left = amount;
@@ -62,7 +79,7 @@ impl Market {
 
         // Iterating through the orders from the cheapest to the most expensive and fulfilling them
         // until the requested amount is filled
-        for order in orders.iter_mut() {
+        for order in orders.iter_mut().rev() {
             if am_left == 0 {
                 break;
             }
@@ -82,7 +99,7 @@ impl Market {
                 self.market_price[resource] = m_p;
                 self.market_demand[resource] = self.market_demand[resource].saturating_add(demand);
 
-                acc_price = acc_price.saturating_add(order.value * am_left);
+                acc_price = acc_price.saturating_add(order.cached_price * am_left);
                 am_left = 0;
             } else {
                 if order.amount * order.cached_price + acc_price > cash_available {
@@ -90,15 +107,14 @@ impl Market {
                 }
 
                 am_left = am_left.saturating_sub(order.amount.into());
-                acc_price = acc_price.saturating_add(order.value * order.amount);
+                acc_price = acc_price.saturating_add(order.cached_price * order.amount);
 
                 let (m_p, demand) = order.fulfill(order.amount);
                 sellers.push((order.agent, order.amount * order.cached_price));
-                
+
                 // Update the demand and market price of the resource
                 self.market_price[resource] = m_p;
                 self.market_demand[resource] = self.market_demand[resource].saturating_add(demand);
-
             }
         }
 
@@ -107,18 +123,26 @@ impl Market {
         return (sellers, amount - am_left);
     }
 
-    pub fn buy(&mut self, resource: ResourceItem, amount: u32, cash_available: u32) -> (Vec<(EntityId, u32)>, u32) {
+    pub fn buy(
+        &mut self,
+        resource: ResourceItem,
+        amount: u32,
+        cash_available: u32,
+    ) -> (Vec<(EntityId, u32)>, u32) {
         let result = self.buy_resource(resource, amount, cash_available);
 
         // Remove all orders where the amount is 0
 
         self.orders[resource].retain(|ord| ord.amount > 0);
-       
+
         result
     }
 
     pub fn market_price(&self, resource_item: ResourceItem) -> (u32, u32) {
-        (self.market_price[resource_item], self.market_demand[resource_item])
+        (
+            self.market_price[resource_item],
+            self.market_demand[resource_item],
+        )
     }
 
     pub fn total_price(&self, meals: &PerResource<u32>) -> u32 {
@@ -165,19 +189,16 @@ impl Order {
                 let diff = self.cached_price - market_price;
                 self.cached_price = self.cached_price.saturating_sub(diff / 2)
             }
-
             // If the order price is actually below the market price, then the
             // market has shrunk and the market price needs to fall
             // In that case the order price will be reduced by 25%
             else {
-                self.cached_price = self.cached_price
-                    .saturating_mul(3) / 4;
+                self.cached_price = self.cached_price.saturating_mul(3) / 4;
             }
             // In DEFAULT_EXP steps, if the order is still not fulfilled,
             // its price will be updated again
             self.expiration = DEFAULT_EXP;
         }
-        
         // If the order has not expired, it simply lowers the expiration
         else {
             self.expiration -= 1;
@@ -187,8 +208,7 @@ impl Order {
     pub fn fulfill(&mut self, _amount: u32) -> (u32, u32) {
         if _amount >= self.amount {
             self.amount = 0;
-        }
-        else {
+        } else {
             self.amount = self.amount.saturating_sub(_amount);
         }
         (self.cached_price, self.amount)
