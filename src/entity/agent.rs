@@ -15,8 +15,6 @@ use super::{
     Entity, EntityId, EntityType,
 };
 
-use std::cmp::min;
-
 #[derive(Debug, Clone, Hash)]
 pub struct Agent {
     /// This contains the agents job, and all variables associated with said
@@ -107,23 +105,23 @@ impl Agent {
             },
             AgentState::BeHome => {
                 if self.energy < 5000 {
-                    if let Some(_meal_plan) = &self.meal_plan {
-                        for r in ResourceItem::iterator() {
-                            if _meal_plan[*r] > 0 && self.inventory[*r] > 0 {
-                                let quantity: u32 = min(_meal_plan[*r], self.inventory[*r]);
-                                return AgentAction::Consume(*r, quantity);
-                            }
-                        }
-                        self.meal_plan = None;
-                    }
+                    // if let Some(_meal_plan) = &self.meal_plan {
+                    //     for r in ResourceItem::iterator() {
+                    //         if _meal_plan[*r] > 0 && self.inventory[*r] > 0 {
+                    //             let quantity: u32 = min(_meal_plan[*r], self.inventory[*r]);
+                    //             return AgentAction::Consume(*r, quantity);
+                    //         }
+                    //     }
+                    //     self.meal_plan = None;
+                    // }
 
-                    /*let mut items = self.nutrition.iter().collect::<Vec<_>>();
-                    items.sort_by_key(|i| i.1);
+                    let mut items = self.nutrition.iter().collect::<Vec<_>>();
+                    items.sort_by_key(|i| std::cmp::Reverse(i.1));
                     for (r, n) in items {
-                        if *n > 40 && self.inventory[r] > 0 {
-                            return AgentAction::Consume(r);
+                        if *n > 0 && self.inventory[r] > 0 {
+                            return AgentAction::Consume(r, self.inventory[r].min(1));
                         }
-                    }*/
+                    }
                 }
                 if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world)) {
                     // TODO: Make an informed choice
@@ -265,6 +263,7 @@ impl Agent {
     }
 
     pub fn make_mealing_plan(&self, market: &Market) -> Option<PerResource<u32>> {
+        return Some(PerResource::new(20));
         let mut to_ret: PerResource<u32> = PerResource::default();
 
         if self.energy >= self.energy_quota {
@@ -286,7 +285,6 @@ impl Agent {
                 needed_energy / unit_energy + ((needed_energy % unit_energy != 0) as u32);
 
             to_ret[*r_item] = needed_amount;
-            
 
             // // If the market or the inventory has more than the needed amount,
             // // we can buy it and the agent doesn't need anything else in its mealing plan
@@ -585,7 +583,8 @@ impl Agent {
 
 impl Default for Agent {
     fn default() -> Self {
-        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * 5. + 10.).max(0.) as u32;
+        let greed =
+            (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * 5. + 10.).max(0.) as u32;
         Agent {
             job: random(),
             state: AgentState::DoJob,
