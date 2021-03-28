@@ -92,14 +92,14 @@ impl ResourceItem {
             ResourceItem::Fish,
             ResourceItem::Meat,
         ];
-        
+
         resource_item.sort_by_key(|r| {
             let (projected_price, _) = market.market_price(*r);
             let projected_energy = agent.nutrition[*r] as u32 * 1000_000;
 
             std::cmp::Reverse(projected_energy / (projected_price + 1))
         });
-        
+
         resource_item
     }
 

@@ -13,7 +13,7 @@ use crate::{
         EntityType,
     },
     tile::TileType,
-    world::Pos,
+    world::{Pos, RESOURCE_AMOUNT_MEAN},
 };
 
 const OCEAN_CUTOFF: isize = -300;
@@ -134,19 +134,19 @@ impl TileDistribution {
                     TileType::Grass,
                     Some(EntityType::Resource(Resource::new(
                         ResourceItem::Berry,
-                        255,
+                        RESOURCE_AMOUNT_MEAN as u16,
                     ))),
                 ),
                 (
                     TileType::Grass,
                     Some(EntityType::Resource(Resource::new(
                         ResourceItem::Wheat,
-                        255,
+                        RESOURCE_AMOUNT_MEAN as u16,
                     ))),
                 ),
                 (
                     TileType::Grass,
-                    Some(EntityType::Resource(Resource::new(ResourceItem::Meat, 255))),
+                    Some(EntityType::Resource(Resource::new(ResourceItem::Meat, 20))),
                 ),
             ],
             // TODO IVO: Don't forget to update the weights
@@ -176,7 +176,7 @@ impl TileDistribution {
                 (TileType::WaterRock, None),
                 (
                     TileType::Water,
-                    Some(EntityType::Resource(Resource::new(ResourceItem::Fish, 255))),
+                    Some(EntityType::Resource(Resource::new(ResourceItem::Fish, RESOURCE_AMOUNT_MEAN as u16))),
                 ),
             ],
             weights: WeightedIndex::new(&[1000, 1, 20]).unwrap(),

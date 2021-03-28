@@ -2,25 +2,46 @@ use crate::entity::{
     resources::{PerResource, ResourceItem},
     EntityId,
 };
-
-pub const DEFAULT_EXP: u32 = 200 * 10;
+pub const DAY_LENGTH: u32 = 200;
+pub const DEFAULT_EXP: u32 = DAY_LENGTH * 10;
+pub const DEFAULT_RVAL: u32 = DAY_LENGTH * 3;
+pub const ORDER_PRICE_DECAY: u32 = 75;
 
 #[derive(Debug, Clone, Default)]
 pub struct Market {
-    pub market_price: PerResource<u32>,
+    pub market_price: PerResource<f32>,
     pub market_demand: PerResource<u32>,
     // TODO Ivo - make sure the orders are sorted
     orders: PerResource<Vec<Order>>,
 }
 
 impl Market {
-    pub fn cache_prices(&mut self, tick: u32) {
+    pub fn step(&mut self, tick: u32, mut _expire: impl FnMut(&Order, ResourceItem)) {
         if tick % 200 == 0 {
             self.market_demand = Default::default();
         }
 
+        for (_r, orders) in self.orders.iter_mut() {
+            let mut remove = orders
+                .iter_mut()
+                .map(|o| o.expire())
+                .collect::<Vec<_>>()
+                .into_iter();
+            orders.retain(|_o| {
+                if let Some(true) = remove.next() {
+                    // (expire)(o, r);
+                    false
+                } else {
+                    true
+                }
+            })
+        }
+        self.cache_prices();
+    }
+
+    pub fn cache_prices(&mut self) {
         for (r, orders) in self.orders.iter_mut() {
-            let market_price = self.market_price[r];
+            let market_price = self.market_price[r] as u32;
             orders.iter_mut().for_each(|o| o.cache_price(market_price));
             orders.sort_by_key(|o| o.cached_price);
         }
@@ -43,6 +64,7 @@ impl Market {
                 amount,
                 agent,
                 expiration: DEFAULT_EXP,
+                re_eval: DEFAULT_RVAL,
             },
         );
     }
@@ -84,6 +106,8 @@ impl Market {
                 break;
             }
 
+            const MP_UPDATE: f32 = 0.01;
+
             // If the agent wants to partially fulfill the order, it still stays
             // but its amount is decremented
             if order.amount > am_left.into() {
@@ -96,7 +120,8 @@ impl Market {
                 sellers.push((order.agent, am_left * order.cached_price));
 
                 // Update the demand and market price of the resource
-                self.market_price[resource] = m_p;
+                self.market_price[resource] =
+                    self.market_price[resource] * (1. - MP_UPDATE) + m_p as f32 * MP_UPDATE;
                 self.market_demand[resource] = self.market_demand[resource].saturating_add(demand);
 
                 acc_price = acc_price.saturating_add(order.cached_price * am_left);
@@ -113,7 +138,8 @@ impl Market {
                 sellers.push((order.agent, order.amount * order.cached_price));
 
                 // Update the demand and market price of the resource
-                self.market_price[resource] = m_p;
+                self.market_price[resource] =
+                    self.market_price[resource] * (1. - MP_UPDATE) + m_p as f32 * MP_UPDATE;
                 self.market_demand[resource] = self.market_demand[resource].saturating_add(demand);
             }
         }
@@ -140,7 +166,7 @@ impl Market {
 
     pub fn market_price(&self, resource_item: ResourceItem) -> (u32, u32) {
         (
-            self.market_price[resource_item],
+            self.market_price[resource_item] as u32,
             self.market_demand[resource_item],
         )
     }
@@ -148,7 +174,7 @@ impl Market {
     pub fn total_price(&self, meals: &PerResource<u32>) -> u32 {
         let mut sum: u32 = 0;
         for r_item in ResourceItem::iterator() {
-            sum += self.market_price[*r_item] * meals[*r_item];
+            sum += self.market_price[*r_item] as u32 * meals[*r_item];
         }
 
         sum
@@ -170,18 +196,28 @@ impl Market {
 
 #[derive(Debug, Clone)]
 pub struct Order {
-    cached_price: u32,
-    value: u32,
-    amount: u32,
-    agent: EntityId,
-    expiration: u32,
+    pub cached_price: u32,
+    pub value: u32,
+    pub amount: u32,
+    pub agent: EntityId,
+    pub re_eval: u32,
+    pub expiration: u32,
 }
 
 impl Order {
+    pub fn expire(&mut self) -> bool {
+        if self.expiration == 0 {
+            true
+        } else {
+            self.expiration -= 1;
+            false
+        }
+    }
+
     pub fn cache_price(&mut self, market_price: u32) {
         // If the order has expired, its price needs to update to be better
-        // suited to the market and its expiration is set back to the default
-        if self.expiration == 0 {
+        // suited to the market and its re_eval is set back to the default
+        if self.re_eval == 0 {
             // The price of the order is updated so it is twice as close
             // to the market price - that is if the order is more expensive
             // than the market price
@@ -193,15 +229,15 @@ impl Order {
             // market has shrunk and the market price needs to fall
             // In that case the order price will be reduced by 25%
             else {
-                self.cached_price = self.cached_price.saturating_mul(3) / 4;
+                self.cached_price = self.cached_price.saturating_mul(ORDER_PRICE_DECAY) / 100;
             }
             // In DEFAULT_EXP steps, if the order is still not fulfilled,
             // its price will be updated again
-            self.expiration = DEFAULT_EXP;
+            self.re_eval = DEFAULT_EXP;
         }
-        // If the order has not expired, it simply lowers the expiration
+        // If the order has not expired, it simply lowers the re_eval
         else {
-            self.expiration -= 1;
+            self.re_eval -= 1;
         }
     }
 

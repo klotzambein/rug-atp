@@ -90,7 +90,7 @@ fn main() {
             seconds -= 1. / tps;
             world.borrow_mut().step(&mut *stats.borrow_mut());
             if (Instant::now() - start_sim).as_secs_f32() > 0.1 {
-                tps = 100f32.max(tps / 2.);
+                tps = 100f32.max(tps * 0.9);
                 seconds = 0.0;
                 break;
             }

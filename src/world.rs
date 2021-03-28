@@ -1,20 +1,16 @@
 use dear_gui::graphics::primitives::{Sprite, Vf2};
 use glium::Display;
-use rand::Rng;
+use rand::{seq::IteratorRandom, thread_rng, Rng};
 
-use crate::{
-    entity::{agent::Job, resources::PerResource, Entity, EntityId, EntityType},
-    entity::{
+use crate::{entity::{agent::Job, resources::PerResource, Entity, EntityId, EntityType}, entity::{
         agent::{Agent, AgentAction},
         building::Building,
         resources::Resource,
-    },
-    generation::BiomeMap,
-    grid::CanvasGrid,
-    market::Market,
-    statistics::Statistics,
-    tile::TileType,
-};
+    }, generation::BiomeMap, grid::CanvasGrid, market::{DAY_LENGTH, Market}, statistics::Statistics, tile::TileType};
+
+pub const RESOURCE_TIMEOUT: u16 = DAY_LENGTH as u16 * 10;
+pub const RESOURCE_AMOUNT_SD: f32 = 10.;
+pub const RESOURCE_AMOUNT_MEAN: f32 = 20.;
 
 pub struct World {
     pub tiles_type: Vec<TileType>,
@@ -30,6 +26,7 @@ pub struct World {
     pub tick: u32,
     pub is_running: bool,
     pub alive_count: u32,
+    pub start_count: u32,
 }
 
 impl World {
@@ -52,6 +49,10 @@ impl World {
             .take(width * height)
             .collect::<Vec<_>>();
 
+        let start_count = entities
+            .iter()
+            .filter(|e| matches!(e.ty, EntityType::Agent(_)))
+            .count() as u32;
         World {
             tiles_type,
             tiles_entity,
@@ -66,6 +67,7 @@ impl World {
             tick: 0,
             is_running: true,
             alive_count: 0,
+            start_count,
         }
     }
 
@@ -156,8 +158,25 @@ impl World {
         }
     }
 
+    pub fn random_alive(&self) -> Option<EntityId> {
+        self.entities
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| matches!(e.ty, EntityType::Agent(Agent { dead: false, .. })))
+            .map(|(i, _)| EntityId::new(i))
+            .choose(&mut thread_rng())
+    }
+
     pub fn step_once(&mut self, stats: &mut Statistics) {
-        self.market.cache_prices(self.tick);
+        {
+            let es = &mut self.entities;
+            self.market.step(self.tick, |o, r| {
+                if let EntityType::Agent(a) = &mut es[o.agent.as_index()].ty {
+                    a.collect(r, o.amount);
+                }
+            });
+        }
+
         self.alive_count = 0;
 
         for i in 0..self.entities.len() {
@@ -358,12 +377,13 @@ impl World {
         // to respawn
         if r.available() == 0 {
             if r.timeout == 0 {
-                r.timeout = 200 * 15;
+                r.timeout = RESOURCE_TIMEOUT;
                 self.tiles_entity[current_tile_idx] = None;
             } else if r.timeout == 1 {
                 self.tiles_entity[current_tile_idx] = Some(EntityId::new(idx));
                 r.timeout = 0;
-                r.amount = 20;
+                r.amount = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * RESOURCE_AMOUNT_SD + RESOURCE_AMOUNT_MEAN)
+                    .max(0.) as u16;
             } else {
                 r.timeout -= 1;
             }
@@ -427,7 +447,7 @@ impl World {
 
     /// The days start at 0 and last 200 ticks.
     pub fn time_of_day(&self) -> u16 {
-        (self.tick % 200) as u16
+        (self.tick % DAY_LENGTH) as u16
     }
 
     pub fn market_prices(&self) -> PerResource<Option<u32>> {

@@ -22,4 +22,6 @@ impl Statistics {
         }
         self.agent_count.push(world.alive_count as f32);
     }
+
+    // pub fn export(&self, std::)
 }

@@ -15,6 +15,28 @@ use super::{
     Entity, EntityId, EntityType,
 };
 
+pub const DAY_LENGTH: u16 = 200;
+
+pub const INITIAL_ENERGY: u32 = 5000;
+pub const CRITICAL_ENERGY: u32 = 1000;
+pub const MAX_ENERGY: u32 = 10000;
+
+pub const INITIAL_CASH: u32 = 5000;
+pub const CLOSING_TIME: u16 = (DAY_LENGTH * 3) / 4;
+pub const TIMEOUT_QUOTA: u16 = (DAY_LENGTH as u16) * 10;
+
+pub const NUTRITION_SUB: u8 = 9;
+pub const NUTRITION_ADD: u8 = 4;
+
+pub const SEARCH_RADIUS: usize = 15;
+pub const UNSTUCKIFIER_CHANCE: f64 = 0.75;
+pub const EXPLORATION_TIMEOUT: u16 = 500;
+pub const GREED_MEAN: f32 = 5.;
+pub const GREED_SD: f32 = 10.;
+
+pub const INITIAL_NUTRITION: u8 = 100;
+pub const INITIAL_INVENTORY: u32 = 0;
+
 #[derive(Debug, Clone, Hash)]
 pub struct Agent {
     /// This contains the agents job, and all variables associated with said
@@ -66,7 +88,7 @@ impl Agent {
             return AgentAction::None;
         }
 
-        self.energy = self.energy.saturating_sub(5);
+        self.energy = self.energy.saturating_sub(2);
         if self.energy == 0 {
             return AgentAction::Die;
         }
@@ -77,7 +99,7 @@ impl Agent {
                 count: 0,
                 observations: Default::default(),
             };
-            self.timeout_quota = 200 * 10;
+            self.timeout_quota = TIMEOUT_QUOTA;
         }
 
         match self.state {
@@ -104,24 +126,24 @@ impl Agent {
                 }
             },
             AgentState::BeHome => {
-                if self.energy < 5000 {
-                    // if let Some(_meal_plan) = &self.meal_plan {
-                    //     for r in ResourceItem::iterator() {
-                    //         if _meal_plan[*r] > 0 && self.inventory[*r] > 0 {
-                    //             let quantity: u32 = min(_meal_plan[*r], self.inventory[*r]);
-                    //             return AgentAction::Consume(*r, quantity);
-                    //         }
-                    //     }
-                    //     self.meal_plan = None;
-                    // }
-
-                    let mut items = self.nutrition.iter().collect::<Vec<_>>();
-                    items.sort_by_key(|i| std::cmp::Reverse(i.1));
-                    for (r, n) in items {
-                        if *n > 0 && self.inventory[r] > 0 {
-                            return AgentAction::Consume(r, self.inventory[r].min(1));
+                if self.energy < INITIAL_ENERGY {
+                    if let Some(_meal_plan) = &self.meal_plan {
+                        for r in ResourceItem::iterator() {
+                            if _meal_plan[*r] > 0 && self.inventory[*r] > 0 {
+                                let quantity: u32 = _meal_plan[*r].min(self.inventory[*r]);
+                                return AgentAction::Consume(*r, quantity);
+                            }
                         }
+                        self.meal_plan = None;
                     }
+
+                    // let mut items = self.nutrition.iter().collect::<Vec<_>>();
+                    // items.sort_by_key(|i| std::cmp::Reverse(i.1));
+                    // for (r, n) in items {
+                    //     if *n > 0 && self.inventory[r] > 0 {
+                    //         return AgentAction::Consume(r, self.inventory[r].min(1));
+                    //     }
+                    // }
                 }
                 if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world)) {
                     // TODO: Make an informed choice
@@ -136,7 +158,7 @@ impl Agent {
                 }
             }
             AgentState::DoJob => {
-                if self.energy < 1000 || world.time_of_day() > 150 {
+                if self.energy < CRITICAL_ENERGY || world.time_of_day() > CLOSING_TIME {
                     self.state = AgentState::GoHome;
                 }
                 self.do_job(pos, world)
@@ -157,7 +179,7 @@ impl Agent {
                 }
             }
             AgentState::TradeOnMarket => {
-                if self.energy > 1000 && world.time_of_day() < 150 {
+                if self.energy > CRITICAL_ENERGY && world.time_of_day() < CLOSING_TIME {
                     if let Some(action) = self.trade_on_market(pos, world) {
                         return action;
                     }
@@ -183,9 +205,10 @@ impl Agent {
                 if boat.is_some() {
                     // if on sand: go water
                     if let TileType::Sand = world.tile_type(pos) {
-                        let target = world.find_tile_around(pos, 15 * 15, |p| {
-                            world.tile_type(p) == TileType::Water
-                        });
+                        let target =
+                            world.find_tile_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, |p| {
+                                world.tile_type(p) == TileType::Water
+                            });
                         return self
                             .path_find(pos, target, world)
                             .map(|p| {
@@ -203,9 +226,10 @@ impl Agent {
                 }
 
                 // First find a boat and enter it
-                let target_pos = world.find_entity_around(pos, 20 * 20, |e| {
-                    matches!(e.ty, EntityType::Building(Building::Boat { .. }))
-                });
+                let target_pos =
+                    world.find_entity_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, |e| {
+                        matches!(e.ty, EntityType::Building(Building::Boat { .. }))
+                    });
 
                 let pf = self.path_find(pos, target_pos, world);
 
@@ -218,7 +242,7 @@ impl Agent {
                 observations,
                 count,
             } => {
-                world.find_entity_around(pos, 15 * 15, |e| {
+                world.find_entity_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, |e| {
                     // matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
                     match &e.ty {
                         EntityType::Resource(r) => {
@@ -231,7 +255,7 @@ impl Agent {
                 });
 
                 *count += 1;
-                if *count == 200 {
+                if *count == EXPLORATION_TIMEOUT {
                     let mut max_freq: u32 = 0;
                     let mut best_item: ResourceItem = ResourceItem::Berry;
                     for (resource, observation) in observations.iter() {
@@ -263,7 +287,7 @@ impl Agent {
     }
 
     pub fn make_mealing_plan(&self, market: &Market) -> Option<PerResource<u32>> {
-        return Some(PerResource::new(20));
+        // return Some(PerResource::new(10));
         let mut to_ret: PerResource<u32> = PerResource::default();
 
         if self.energy >= self.energy_quota {
@@ -271,7 +295,7 @@ impl Agent {
         }
 
         // Calculating the energy needed to fulfill the quota and updating it as the meal plan is constructed
-        let mut needed_energy = self.energy_quota - self.energy;
+        let mut needed_energy = self.energy_quota.saturating_sub(self.energy);
 
         // Finding the maximum projected energy over projected price (benefit) of each resource type on the market
         for r_item in ResourceItem::sorted(self, &market).iter() {
@@ -284,20 +308,20 @@ impl Agent {
             let needed_amount: u32 =
                 needed_energy / unit_energy + ((needed_energy % unit_energy != 0) as u32);
 
-            to_ret[*r_item] = needed_amount;
+            // to_ret[*r_item] = needed_amount;
 
-            // // If the market or the inventory has more than the needed amount,
-            // // we can buy it and the agent doesn't need anything else in its mealing plan
-            // let availability = market.availability(*r_item) + self.inventory[*r_item];
-            // if availability >= needed_amount {
-            //     to_ret[*r_item] = needed_amount;
-            //     return Some(to_ret);
-            // }
+            // If the market or the inventory has more than the needed amount,
+            // we can buy it and the agent doesn't need anything else in its mealing plan
+            let availability = market.availability(*r_item) + self.inventory[*r_item];
+            if availability >= needed_amount {
+                to_ret[*r_item] = needed_amount;
+                return Some(to_ret);
+            }
 
-            // // If the market does not have enough of the resource available, the agent buys whatever
-            // // is available and  the loop keeps going on other, less cost-efficient resources
-            // to_ret[*r_item] = availability;
-            // needed_energy = needed_energy.saturating_sub(needed_amount * unit_energy);
+            // If the market does not have enough of the resource available, the agent buys whatever
+            // is available and  the loop keeps going on other, less cost-efficient resources
+            to_ret[*r_item] = availability;
+            needed_energy = needed_energy.saturating_sub(needed_amount * unit_energy);
         }
         return Some(to_ret);
     }
@@ -305,31 +329,28 @@ impl Agent {
     // Every time an agent gets home (finishes the working day), they set an energy quota
     // for the next day
     pub fn update_quotas(&mut self) -> () {
-        let baseline_energy = 5000;
         // If the agent's energy is above the baseline, their goal for the next day is simply not to
         // lose any more energy
-        if self.energy >= 5000 {
+        if self.energy >= INITIAL_ENERGY {
             self.energy_quota = self.energy;
             return;
         }
 
         // Otherwise, the agent has to compensate - they need to increase their energy the next day
         // by p%, where p is (5000 - energy) / 100
-        let mut p: f32 = (baseline_energy - self.energy) as f32;
-        p /= 1000.0;
+        let mut p: f32 = (INITIAL_ENERGY - self.energy) as f32;
+        p /= 10000.0;
 
         let quota_f32 = (self.energy as f32) * (1.0 + p);
         self.energy_quota = quota_f32.ceil() as u32;
 
         // Update the cash quota with respect to the greed
-        let old_cash_quota = self.cash_quota;
+        if self.cash >= self.cash_quota {
+            self.timeout_quota = TIMEOUT_QUOTA;
+        }
 
         let desired_profit: f32 = (self.greed as f32) / 100.0;
         self.cash_quota = self.cash + ((self.cash as f32) * desired_profit) as u32;
-
-        if old_cash_quota != self.cash_quota {
-            self.timeout_quota = 200 * 10;
-        }
     }
 
     fn make_shopping_list(&self, meal_plan: &Option<PerResource<u32>>) -> Option<PerResource<u32>> {
@@ -374,27 +395,20 @@ impl Agent {
 
         // After a shopping list has been constructed, it sells everything they don't need
 
-        // Specifically the item that they mine at their job will be the one they may have an excess of
-        let item_sell: Option<ResourceItem> = match self.job {
-            Job::Butcher => Some(ResourceItem::Meat),
-            Job::Farmer => Some(ResourceItem::Wheat),
-            Job::Lumberer => Some(ResourceItem::Berry),
-            Job::Fisher { .. } => Some(ResourceItem::Fish),
-            Job::Explorer { .. } => None,
-        };
-
-        // If the agent is not an explorer, they will sell everything they don't need from their resources
-        if let Some(r_item) = item_sell {
+        for r_item in ResourceItem::iterator() {
             let excess: u32 = match &self.meal_plan {
                 Some(_meal_plan) => {
-                    if self.inventory[r_item] > _meal_plan[r_item] {
-                        self.inventory[r_item] - _meal_plan[r_item]
+                    if self.inventory[*r_item] > _meal_plan[*r_item] {
+                        self.inventory[*r_item] - _meal_plan[*r_item]
                     } else {
                         0
                     }
                 }
                 None => 0,
             };
+            if excess == 0 {
+                continue;
+            }
 
             // It needs to calculate the total money spent on shopping
             let total_price: u32 = match &self.shopping_list {
@@ -411,12 +425,13 @@ impl Agent {
 
             // insufficiency = 30   balance = 10 price = 3
             let insufficiency = self.cash_quota.saturating_sub(balance_after_purchase);
-            if excess > 0 && insufficiency > 0 {
+            if insufficiency > 0 {
                 let price = insufficiency / excess + (insufficiency % excess != 0) as u32;
-                let price = price.max(10);
+                let price = price.max(0);
+
                 // Finally it puts the order on the action list
                 return Some(AgentAction::MarketOrder {
-                    item: r_item,
+                    item: *r_item,
                     price: price,
                     amount: excess,
                 });
@@ -477,10 +492,8 @@ impl Agent {
         target: &mut Option<Pos>,
         f: impl FnMut(&Entity) -> bool,
     ) -> Result<Pos, AgentAction> {
-        let search_radius = 15;
-
         if target.is_none() {
-            *target = world.find_entity_around(pos, search_radius * search_radius, f);
+            *target = world.find_entity_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, f);
         }
 
         self.path_find(pos, *target, world)
@@ -488,9 +501,7 @@ impl Agent {
 
     /// This function will return actions that lead to the agents locating a resource and farming it.
     pub fn find_and_farm(&mut self, world: &World, pos: Pos, item: ResourceItem) -> AgentAction {
-        let search_radius = 15;
-
-        let target_pos = world.find_entity_around(pos, search_radius * search_radius, |e| {
+        let target_pos = world.find_entity_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, |e| {
             if let EntityType::Resource(r) = &e.ty {
                 r.produces_item(item) && r.available() > 0
             } else {
@@ -520,7 +531,7 @@ impl Agent {
         world: &World,
     ) -> Result<Pos, AgentAction> {
         let mut rng = rand::thread_rng();
-        let unstuckifier = Bernoulli::new(0.75).unwrap();
+        let unstuckifier = Bernoulli::new(UNSTUCKIFIER_CHANCE).unwrap();
 
         if let Some(target) = target {
             if target.is_adjacent(pos) {
@@ -565,11 +576,9 @@ impl Agent {
         assert!(self.inventory[resource] > 0);
         self.inventory[resource] = self.inventory[resource].saturating_sub(quantity);
         self.energy += (self.nutrition[resource] as u32) * quantity;
-        if self.energy > 10000 {
-            self.energy = 10000;
+        if self.energy > MAX_ENERGY {
+            self.energy = MAX_ENERGY;
         }
-        const NUTRITION_SUB: u8 = 9;
-        const NUTRITION_ADD: u8 = 4;
 
         for (r, n) in self.nutrition.iter_mut() {
             if r == resource {
@@ -584,24 +593,24 @@ impl Agent {
 impl Default for Agent {
     fn default() -> Self {
         let greed =
-            (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * 5. + 10.).max(0.) as u32;
+            (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * GREED_MEAN + GREED_SD).max(0.) as u32;
         Agent {
             job: random(),
             state: AgentState::DoJob,
             home: Pos::default(),
-            nutrition: PerResource::new(100),
-            inventory: PerResource::new(0),
-            energy: 5000,
-            energy_quota: 5000,
+            nutrition: PerResource::new(INITIAL_NUTRITION),
+            inventory: PerResource::new(INITIAL_INVENTORY),
+            energy: INITIAL_ENERGY,
+            energy_quota: INITIAL_ENERGY,
             // TODO draw this from a normal distribution
             greed,
             meal_plan: None,
             shopping_list: None,
-            cash: 20_000,
-            cash_quota: 200,
+            cash: INITIAL_CASH,
+            cash_quota: INITIAL_CASH,
             in_building: false,
             dead: false,
-            timeout_quota: 200 * 20,
+            timeout_quota: TIMEOUT_QUOTA,
         }
     }
 }
@@ -654,7 +663,7 @@ pub enum AgentAction {
 pub enum Job {
     // None,
     Explorer {
-        count: u8,
+        count: u16,
         observations: PerResource<u32>,
     },
     Farmer,

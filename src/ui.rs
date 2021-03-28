@@ -84,7 +84,7 @@ impl UI {
             });
     }
 
-    fn window_inspector(&self, ui: &Ui, world: &World) {
+    fn window_inspector(&mut self, ui: &Ui, world: &World) {
         Window::new(im_str!("Inspector"))
             .size([250., 500.], Condition::Once)
             .build(ui, || {
@@ -108,6 +108,9 @@ impl UI {
                 } else {
                     ui.text("Nothing selected");
                 }
+                if ui.button(im_str!("Select alive"), [100., 30.]) {
+                    self.selected_entity = world.random_alive();
+                }
             });
     }
 
@@ -123,13 +126,17 @@ impl UI {
                 ui.text(&format!("M-Prices: {:#?}", world.market.market_price));
                 ui.text(&format!("M-Demand: {:#?}", world.market.market_demand));
                 for (r, p) in self.stats.borrow().prices.iter() {
-                    PlotLines::new(ui, &im_str!("Price {:?}", r), p.as_ref())
+                    let values = p.as_ref();//&p[p.len().max(1000) - 1000..];
+                    PlotLines::new(ui, &im_str!("Price {:?}", r), values)
                         .graph_size([0., 50.])
+                        .scale_min(0.)
                         .build();
                 }
                 for (r, v) in self.stats.borrow().volume.iter() {
-                    PlotLines::new(ui, &im_str!("Volume {:?}", r), v.as_ref())
+                    let values = v.as_ref();//&v[v.len().max(1000) - 1000..];
+                    PlotLines::new(ui, &im_str!("Volume {:?}", r), values)
                         .graph_size([0., 50.])
+                        .scale_min(0.)
                         .build();
                 }
             });
@@ -141,7 +148,7 @@ impl UI {
             .build(ui, || {
                 PlotLines::new(
                     ui,
-                    &im_str!("Alive agents:\n{}", world.alive_count),
+                    &im_str!("Alive agents:\n{}\nDead agents:\n{}", world.alive_count, world.start_count - world.alive_count),
                     self.stats.borrow().agent_count.as_ref(),
                 )
                 .graph_size([0., 50.])
