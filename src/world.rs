@@ -363,7 +363,7 @@ impl World {
             } else if r.timeout == 1 {
                 self.tiles_entity[current_tile_idx] = Some(EntityId::new(idx));
                 r.timeout = 0;
-                r.amount = 255;
+                r.amount = 20;
             } else {
                 r.timeout -= 1;
             }

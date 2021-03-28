@@ -68,7 +68,7 @@ impl Agent {
             return AgentAction::None;
         }
 
-        self.energy = self.energy.saturating_sub(1);
+        self.energy = self.energy.saturating_sub(5);
         if self.energy == 0 {
             return AgentAction::Die;
         }
@@ -285,18 +285,21 @@ impl Agent {
             let needed_amount: u32 =
                 needed_energy / unit_energy + ((needed_energy % unit_energy != 0) as u32);
 
-            // If the market or the inventory has more than the needed amount,
-            // we can buy it and the agent doesn't need anything else in its mealing plan
-            let availability = market.availability(*r_item) + self.inventory[*r_item];
-            if availability >= needed_amount {
-                to_ret[*r_item] = needed_amount;
-                return Some(to_ret);
-            }
+            to_ret[*r_item] = needed_amount;
+            
 
-            // If the market does not have enough of the resource available, the agent buys whatever
-            // is available and  the loop keeps going on other, less cost-efficient resources
-            to_ret[*r_item] = availability;
-            needed_energy = needed_energy.saturating_sub(needed_amount * unit_energy);
+            // // If the market or the inventory has more than the needed amount,
+            // // we can buy it and the agent doesn't need anything else in its mealing plan
+            // let availability = market.availability(*r_item) + self.inventory[*r_item];
+            // if availability >= needed_amount {
+            //     to_ret[*r_item] = needed_amount;
+            //     return Some(to_ret);
+            // }
+
+            // // If the market does not have enough of the resource available, the agent buys whatever
+            // // is available and  the loop keeps going on other, less cost-efficient resources
+            // to_ret[*r_item] = availability;
+            // needed_energy = needed_energy.saturating_sub(needed_amount * unit_energy);
         }
         return Some(to_ret);
     }
@@ -315,7 +318,7 @@ impl Agent {
         // Otherwise, the agent has to compensate - they need to increase their energy the next day
         // by p%, where p is (5000 - energy) / 100
         let mut p: f32 = (baseline_energy - self.energy) as f32;
-        p /= 10000.0;
+        p /= 1000.0;
 
         let quota_f32 = (self.energy as f32) * (1.0 + p);
         self.energy_quota = quota_f32.ceil() as u32;
@@ -412,6 +415,7 @@ impl Agent {
             let insufficiency = self.cash_quota.saturating_sub(balance_after_purchase);
             if excess > 0 && insufficiency > 0 {
                 let price = insufficiency / excess + (insufficiency % excess != 0) as u32;
+                let price = price.max(10);
                 // Finally it puts the order on the action list
                 return Some(AgentAction::MarketOrder {
                     item: r_item,
@@ -581,7 +585,7 @@ impl Agent {
 
 impl Default for Agent {
     fn default() -> Self {
-        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * 5.).max(0.) as u32;
+        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * 5. + 10.).max(0.) as u32;
         Agent {
             job: random(),
             state: AgentState::DoJob,
@@ -594,7 +598,7 @@ impl Default for Agent {
             greed,
             meal_plan: None,
             shopping_list: None,
-            cash: 200,
+            cash: 20_000,
             cash_quota: 200,
             in_building: false,
             dead: false,

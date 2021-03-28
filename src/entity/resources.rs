@@ -64,31 +64,26 @@ impl ResourceItem {
         RESOURCE_ITEMS.iter()
     }
 
-    pub fn sort_by_benefit(items: &mut [ResourceItem; 4], agent: &Agent, market: &Market) {
-        // Sort (direct selection) the array by the benefit
-        // (given by the accumulated energy over the cost)
-
-        for i in 0..4 {
-            let mut max_ind: u8 = 0;
-            let mut max: f32 = 0.0;
-
-            for j in i..4 {
-                let (projected_price, _) = market.market_price(ResourceItem::from_index(j));
-                let projected_energy = (agent.nutrition[j]) as f32;
-
-                let benefit: f32 = projected_energy / projected_price as f32;
-
-                if benefit > max {
-                    max = benefit;
-                    max_ind = j;
-                }
-            }
-
-            let swap: ResourceItem = items[i as usize];
-            items[i as usize] = items[max_ind as usize];
-            items[max_ind as usize] = swap;
-        }
-    }
+    // pub fn sort_by_benefit(items: &mut [ResourceItem; 4], agent: &Agent, market: &Market) {
+    //     // Sort (direct selection) the array by the benefit
+    //     // (given by the accumulated energy over the cost)
+    //     for i in 0..4 {
+    //         let mut max_ind: u8 = 0;
+    //         let mut max: f32 = 0.0;
+    //         for j in i..4 {
+    //             let (projected_price, _) = market.market_price(ResourceItem::from_index(j));
+    //             let projected_energy = (agent.nutrition[j]) as f32;
+    //             let benefit: f32 = projected_energy / projected_price as f32;
+    //             if benefit > max {
+    //                 max = benefit;
+    //                 max_ind = j;
+    //             }
+    //         }
+    //         let swap: ResourceItem = items[i as usize];
+    //         items[i as usize] = items[max_ind as usize];
+    //         items[max_ind as usize] = swap;
+    //     }
+    // }
 
     pub fn sorted(agent: &Agent, market: &Market) -> [ResourceItem; 4] {
         let mut resource_item: [ResourceItem; 4] = [
@@ -97,7 +92,14 @@ impl ResourceItem {
             ResourceItem::Fish,
             ResourceItem::Meat,
         ];
-        ResourceItem::sort_by_benefit(&mut resource_item, agent, market);
+        
+        resource_item.sort_by_key(|r| {
+            let (projected_price, _) = market.market_price(*r);
+            let projected_energy = agent.nutrition[*r] as u32 * 1000_000;
+
+            std::cmp::Reverse(projected_energy / (projected_price + 1))
+        });
+        
         resource_item
     }
 

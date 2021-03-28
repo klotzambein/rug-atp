@@ -3,7 +3,7 @@ use crate::entity::{
     EntityId,
 };
 
-pub const DEFAULT_EXP: u32 = 200;
+pub const DEFAULT_EXP: u32 = 200 * 10;
 
 #[derive(Debug, Clone, Default)]
 pub struct Market {
@@ -22,12 +22,12 @@ impl Market {
         for (r, orders) in self.orders.iter_mut() {
             let market_price = self.market_price[r];
             orders.iter_mut().for_each(|o| o.cache_price(market_price));
-            orders.sort_by_key(|o| o.cached_price)
+            orders.sort_by_key(|o| o.cached_price);
         }
     }
 
     pub fn prices(&self) -> PerResource<Option<u32>> {
-        self.orders.map(|os| Some(os.last()?.cached_price))
+        self.orders.map(|os| Some(os.first()?.cached_price))
     }
 
     pub fn order(&mut self, agent: EntityId, item: ResourceItem, price: u32, amount: u32) {
@@ -79,7 +79,7 @@ impl Market {
 
         // Iterating through the orders from the cheapest to the most expensive and fulfilling them
         // until the requested amount is filled
-        for order in orders.iter_mut().rev() {
+        for order in orders.iter_mut() {
             if am_left == 0 {
                 break;
             }
