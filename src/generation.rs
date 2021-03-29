@@ -17,9 +17,6 @@ use crate::{
     world::Pos,
 };
 
-const OCEAN_CUTOFF: isize = -300;
-const BEACH_CUTOFF: isize = -250;
-
 pub struct Biome {
     tiles: TileDistribution,
     /// To select what biome goes where we use two noise maps, one containing
@@ -31,15 +28,21 @@ pub struct Biome {
 
 impl Biome {
     pub fn ocean(config: &Config) -> Biome {
+        let ocean_cutoff = config.ocean_cutoff;
         Biome {
             tiles: TileDistribution::ocean(config),
-            score_fn: Box::new(|elevation, _climate| (elevation < OCEAN_CUTOFF) as isize * 10000),
+            score_fn: Box::new(move |elevation, _climate| {
+                (elevation < ocean_cutoff) as isize * 10000
+            }),
         }
     }
-    pub fn beach() -> Biome {
+    pub fn beach(config: &Config) -> Biome {
+        let beach_cutoff = config.beach_cutoff;
         Biome {
             tiles: TileDistribution::beach(),
-            score_fn: Box::new(|elevation, _climate| (elevation < BEACH_CUTOFF) as isize * 9000),
+            score_fn: Box::new(move |elevation, _climate| {
+                (elevation < beach_cutoff) as isize * 9000
+            }),
         }
     }
     pub fn grass(config: &Config) -> Biome {
@@ -88,7 +91,7 @@ impl BiomeMap {
             biomes: vec![
                 Biome::ocean(config),
                 Biome::grass(config),
-                Biome::beach(),
+                Biome::beach(config),
                 Biome::desert(),
                 Biome::high_lands(),
             ],

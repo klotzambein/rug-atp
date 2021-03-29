@@ -7,10 +7,6 @@ use crate::{
         EntityId,
     },
 };
-// pub const DAY_LENGTH: u32 = 200;
-// pub const DEFAULT_EXP: u32 = DAY_LENGTH * 10;
-// pub const DEFAULT_RVAL: u32 = DAY_LENGTH * 3;
-// pub const ORDER_PRICE_DECAY: u32 = 75;
 
 #[derive(Debug, Clone, Default)]
 pub struct Market {
@@ -114,8 +110,6 @@ impl Market {
             if am_left == 0 {
                 break;
             }
-
-            // const MP_UPDATE: f32 = 0.01;
 
             // If the agent wants to partially fulfill the order, it still stays
             // but its amount is decremented

@@ -1,29 +1,7 @@
-// pub const closing_time: u16 = (DAY_LENGTH * 3) / 4;
-// pub const critical_energy: u32 = 1000;
-// pub const day_length: u16 = 200;
-// pub const day_length: u32 = 200;
-// pub const default_exp: u32 = DAY_LENGTH * 10;
-// pub const default_rval: u32 = DAY_LENGTH * 3;
-// pub const exploration_timeout: u16 = 500;
-// pub const greed_mean: f32 = 5.;
-// pub const greed_sd: f32 = 10.;
-// pub const initial_cash: u32 = 5000;
-// pub const initial_energy: u32 = 5000;
-// pub const initial_inventory: u32 = 0;
-// pub const initial_nutrition: u8 = 100;
-// pub const max_energy: u32 = 10000;
-// pub const nutrition_add: u8 = 4;
-// pub const nutrition_sub: u8 = 9;
-// pub const order_price_decay: u32 = 75;
-// pub const resource_amount_mean: f32 = 20.;
-// pub const resource_amount_sd: f32 = 10.;
-// pub const resource_timeout: u16 = DAY_LENGTH as u16 * 10;
-// pub const search_radius: usize = 15;
-// pub const timeout_quota: u16 = (DAY_LENGTH as u16) * 10;
-// pub const unstuckifier_chance: f64 = 0.75;
-
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub ocean_cutoff: isize,
+    pub beach_cutoff: isize,
     pub closing_time: u32,
     pub critical_energy: u32,
     pub day_length: u32,
@@ -53,6 +31,8 @@ impl Default for Config {
     fn default() -> Self {
         const DAY_LENGTH: u32 = 200;
         Config {
+            ocean_cutoff: -300,
+            beach_cutoff: -250,
             closing_time: (DAY_LENGTH * 3) / 4,
             critical_energy: 1000,
             day_length: DAY_LENGTH,
