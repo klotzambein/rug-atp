@@ -1,11 +1,16 @@
-use crate::entity::{
-    resources::{PerResource, ResourceItem},
-    EntityId,
+use std::rc::Rc;
+
+use crate::{
+    config::Config,
+    entity::{
+        resources::{PerResource, ResourceItem},
+        EntityId,
+    },
 };
-pub const DAY_LENGTH: u32 = 200;
-pub const DEFAULT_EXP: u32 = DAY_LENGTH * 10;
-pub const DEFAULT_RVAL: u32 = DAY_LENGTH * 3;
-pub const ORDER_PRICE_DECAY: u32 = 75;
+// pub const DAY_LENGTH: u32 = 200;
+// pub const DEFAULT_EXP: u32 = DAY_LENGTH * 10;
+// pub const DEFAULT_RVAL: u32 = DAY_LENGTH * 3;
+// pub const ORDER_PRICE_DECAY: u32 = 75;
 
 #[derive(Debug, Clone, Default)]
 pub struct Market {
@@ -13,11 +18,12 @@ pub struct Market {
     pub market_demand: PerResource<u32>,
     // TODO Ivo - make sure the orders are sorted
     orders: PerResource<Vec<Order>>,
+    config: Rc<Config>,
 }
 
 impl Market {
     pub fn step(&mut self, tick: u32, mut _expire: impl FnMut(&Order, ResourceItem)) {
-        if tick % DAY_LENGTH == 0 {
+        if tick % self.config.day_length == 0 {
             self.market_demand = Default::default();
         }
 
@@ -40,9 +46,12 @@ impl Market {
     }
 
     pub fn cache_prices(&mut self) {
+        let config = self.config.clone();
         for (r, orders) in self.orders.iter_mut() {
             let market_price = self.market_price[r] as u32;
-            orders.iter_mut().for_each(|o| o.cache_price(market_price));
+            orders
+                .iter_mut()
+                .for_each(|o| o.cache_price(market_price, &config));
             orders.sort_by_key(|o| o.cached_price);
         }
     }
@@ -63,8 +72,8 @@ impl Market {
                 value: price,
                 amount,
                 agent,
-                expiration: DEFAULT_EXP,
-                re_eval: DEFAULT_RVAL,
+                expiration: self.config.default_exp,
+                re_eval: self.config.default_rval,
             },
         );
     }
@@ -106,7 +115,7 @@ impl Market {
                 break;
             }
 
-            const MP_UPDATE: f32 = 0.01;
+            // const MP_UPDATE: f32 = 0.01;
 
             // If the agent wants to partially fulfill the order, it still stays
             // but its amount is decremented
@@ -120,8 +129,9 @@ impl Market {
                 sellers.push((order.agent, am_left * order.cached_price));
 
                 // Update the demand and market price of the resource
-                self.market_price[resource] =
-                    self.market_price[resource] * (1. - MP_UPDATE) + m_p as f32 * MP_UPDATE;
+                self.market_price[resource] = self.market_price[resource]
+                    * (1. - self.config.market_price_update)
+                    + m_p as f32 * self.config.market_price_update;
                 self.market_demand[resource] = self.market_demand[resource].saturating_add(demand);
 
                 acc_price = acc_price.saturating_add(order.cached_price * am_left);
@@ -138,8 +148,9 @@ impl Market {
                 sellers.push((order.agent, order.amount * order.cached_price));
 
                 // Update the demand and market price of the resource
-                self.market_price[resource] =
-                    self.market_price[resource] * (1. - MP_UPDATE) + m_p as f32 * MP_UPDATE;
+                self.market_price[resource] = self.market_price[resource]
+                    * (1. - self.config.market_price_update)
+                    + m_p as f32 * self.config.market_price_update;
                 self.market_demand[resource] = self.market_demand[resource].saturating_add(demand);
             }
         }
@@ -214,7 +225,7 @@ impl Order {
         }
     }
 
-    pub fn cache_price(&mut self, market_price: u32) {
+    pub fn cache_price(&mut self, market_price: u32, config: &Config) {
         // If the order has expired, its price needs to update to be better
         // suited to the market and its re_eval is set back to the default
         if self.re_eval == 0 {
@@ -229,11 +240,12 @@ impl Order {
             // market has shrunk and the market price needs to fall
             // In that case the order price will be reduced by 25%
             else {
-                self.cached_price = self.cached_price.saturating_mul(ORDER_PRICE_DECAY) / 100;
+                self.cached_price =
+                    self.cached_price.saturating_mul(config.order_price_decay) / 100;
             }
             // In DEFAULT_EXP steps, if the order is still not fulfilled,
             // its price will be updated again
-            self.re_eval = DEFAULT_EXP;
+            self.re_eval = config.default_rval;
         }
         // If the order has not expired, it simply lowers the re_eval
         else {

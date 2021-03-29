@@ -7,13 +7,14 @@ use rand::{
 };
 
 use crate::{
+    config::Config,
     entity::{
         building::Building,
         resources::{Resource, ResourceItem},
         EntityType,
     },
     tile::TileType,
-    world::{Pos, RESOURCE_AMOUNT_MEAN},
+    world::Pos,
 };
 
 const OCEAN_CUTOFF: isize = -300;
@@ -29,9 +30,9 @@ pub struct Biome {
 }
 
 impl Biome {
-    pub fn ocean() -> Biome {
+    pub fn ocean(config: &Config) -> Biome {
         Biome {
-            tiles: TileDistribution::ocean(),
+            tiles: TileDistribution::ocean(config),
             score_fn: Box::new(|elevation, _climate| (elevation < OCEAN_CUTOFF) as isize * 10000),
         }
     }
@@ -41,9 +42,9 @@ impl Biome {
             score_fn: Box::new(|elevation, _climate| (elevation < BEACH_CUTOFF) as isize * 9000),
         }
     }
-    pub fn grass() -> Biome {
+    pub fn grass(config: &Config) -> Biome {
         Biome {
-            tiles: TileDistribution::grass(),
+            tiles: TileDistribution::grass(config),
             score_fn: Box::new(|_elevation, climate| 1000 - climate.abs()),
         }
     }
@@ -68,7 +69,7 @@ pub struct BiomeMap {
 }
 
 impl BiomeMap {
-    pub fn new() -> BiomeMap {
+    pub fn new(config: &Config) -> BiomeMap {
         let elevation = [0.02, 0.04]
             .iter()
             .map(|s| {
@@ -85,8 +86,8 @@ impl BiomeMap {
             .collect();
         BiomeMap {
             biomes: vec![
-                Biome::ocean(),
-                Biome::grass(),
+                Biome::ocean(config),
+                Biome::grass(config),
                 Biome::beach(),
                 Biome::desert(),
                 Biome::high_lands(),
@@ -116,7 +117,7 @@ pub struct TileDistribution {
 }
 
 impl TileDistribution {
-    pub fn grass() -> TileDistribution {
+    pub fn grass(config: &Config) -> TileDistribution {
         TileDistribution {
             tiles: vec![
                 (TileType::Grass, None),
@@ -134,19 +135,22 @@ impl TileDistribution {
                     TileType::Grass,
                     Some(EntityType::Resource(Resource::new(
                         ResourceItem::Berry,
-                        RESOURCE_AMOUNT_MEAN as u16,
+                        config.resource_amount_mean as u16,
                     ))),
                 ),
                 (
                     TileType::Grass,
                     Some(EntityType::Resource(Resource::new(
                         ResourceItem::Wheat,
-                        RESOURCE_AMOUNT_MEAN as u16,
+                        config.resource_amount_mean as u16,
                     ))),
                 ),
                 (
                     TileType::Grass,
-                    Some(EntityType::Resource(Resource::new(ResourceItem::Meat, RESOURCE_AMOUNT_MEAN as u16))),
+                    Some(EntityType::Resource(Resource::new(
+                        ResourceItem::Meat,
+                        config.resource_amount_mean as u16,
+                    ))),
                 ),
             ],
             // TODO IVO: Don't forget to update the weights
@@ -169,14 +173,17 @@ impl TileDistribution {
         }
     }
 
-    pub fn ocean() -> TileDistribution {
+    pub fn ocean(config: &Config) -> TileDistribution {
         TileDistribution {
             tiles: vec![
                 (TileType::Water, None),
                 (TileType::WaterRock, None),
                 (
                     TileType::Water,
-                    Some(EntityType::Resource(Resource::new(ResourceItem::Fish, RESOURCE_AMOUNT_MEAN as u16))),
+                    Some(EntityType::Resource(Resource::new(
+                        ResourceItem::Fish,
+                        config.resource_amount_mean as u16,
+                    ))),
                 ),
             ],
             weights: WeightedIndex::new(&[1000, 1, 20]).unwrap(),

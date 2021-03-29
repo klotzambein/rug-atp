@@ -7,7 +7,7 @@ pub mod agent;
 pub mod building;
 pub mod resources;
 
-use crate::world::Pos;
+use crate::{config::Config, world::Pos};
 
 use self::{
     agent::{Agent, AgentState},
@@ -109,9 +109,9 @@ pub enum EntityType {
 }
 
 impl EntityType {
-    pub fn initialize(&mut self, pos: Pos, entities: &mut Vec<Entity>) {
+    pub fn initialize(&mut self, pos: Pos, entities: &mut Vec<Entity>, config: &Config) {
         match self {
-            EntityType::Building(b) => b.initialize(pos, entities),
+            EntityType::Building(b) => b.initialize(pos, entities, config),
             _ => {}
         }
     }

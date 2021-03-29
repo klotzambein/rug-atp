@@ -1,18 +1,30 @@
+use std::rc::Rc;
+
 use dear_gui::graphics::primitives::{Sprite, Vf2};
 use glium::Display;
 use rand::{seq::IteratorRandom, thread_rng, Rng};
 
-use crate::{entity::{agent::Job, resources::PerResource, Entity, EntityId, EntityType}, entity::{
+use crate::{
+    config::Config,
+    entity::{agent::Job, resources::PerResource, Entity, EntityId, EntityType},
+    entity::{
         agent::{Agent, AgentAction},
         building::Building,
         resources::Resource,
-    }, generation::BiomeMap, grid::CanvasGrid, market::{DAY_LENGTH, Market}, statistics::Statistics, tile::TileType};
+    },
+    generation::BiomeMap,
+    grid::CanvasGrid,
+    market::Market,
+    statistics::Statistics,
+    tile::TileType,
+};
 
-pub const RESOURCE_TIMEOUT: u16 = DAY_LENGTH as u16 * 10;
-pub const RESOURCE_AMOUNT_SD: f32 = 10.;
-pub const RESOURCE_AMOUNT_MEAN: f32 = 20.;
+// pub const RESOURCE_TIMEOUT: u16 = DAY_LENGTH as u16 * 10;
+// pub const RESOURCE_AMOUNT_SD: f32 = 10.;
+// pub const RESOURCE_AMOUNT_MEAN: f32 = 20.;
 
 pub struct World {
+    pub config: Rc<Config>,
     pub tiles_type: Vec<TileType>,
     pub tiles_entity: Vec<Option<EntityId>>,
     // tiles_resource: Vec<u8>,
@@ -30,8 +42,8 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(width: usize, height: usize, rng: &mut impl Rng) -> World {
-        let biomes = BiomeMap::new();
+    pub fn new(width: usize, height: usize, rng: &mut impl Rng, config: Rc<Config>) -> World {
+        let biomes = BiomeMap::new(&config);
 
         let mut entities = Vec::new();
         let mut tiles_entity = vec![None; width * height];
@@ -40,7 +52,7 @@ impl World {
                 let pos = Pos::new((i % width) as i16, (i / width) as i16);
                 let (tt, e) = biomes.get(pos, rng);
                 if let Some(mut e) = e {
-                    e.initialize(pos, &mut entities);
+                    e.initialize(pos, &mut entities, &config);
                     entities.push(Entity { pos, ty: e });
                     tiles_entity[i] = Some(EntityId::new(entities.len() - 1))
                 }
@@ -68,6 +80,7 @@ impl World {
             is_running: true,
             alive_count: 0,
             start_count,
+            config,
         }
     }
 
@@ -321,7 +334,7 @@ impl World {
                     a.collect(resource, 1)
                 }
             }
-            AgentAction::Consume(r, q) => a.consume(r, q),
+            AgentAction::Consume(r, q) => a.consume(r, q, &self.config),
             AgentAction::MarketOrder {
                 item,
                 price,
@@ -377,12 +390,14 @@ impl World {
         // to respawn
         if r.available() == 0 {
             if r.timeout == 0 {
-                r.timeout = RESOURCE_TIMEOUT;
+                r.timeout = self.config.resource_timeout;
                 self.tiles_entity[current_tile_idx] = None;
             } else if r.timeout == 1 {
                 self.tiles_entity[current_tile_idx] = Some(EntityId::new(idx));
                 r.timeout = 0;
-                r.amount = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * RESOURCE_AMOUNT_SD + RESOURCE_AMOUNT_MEAN)
+                r.amount = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal)
+                    * self.config.resource_amount_sd
+                    + self.config.resource_amount_mean)
                     .max(0.) as u16;
             } else {
                 r.timeout -= 1;
@@ -446,8 +461,8 @@ impl World {
     }
 
     /// The days start at 0 and last 200 ticks.
-    pub fn time_of_day(&self) -> u16 {
-        (self.tick % DAY_LENGTH) as u16
+    pub fn time_of_day(&self) -> u32 {
+        self.tick % self.config.day_length
     }
 
     pub fn market_prices(&self) -> PerResource<Option<u32>> {

@@ -1,4 +1,4 @@
-use crate::world::Pos;
+use crate::{config::Config, world::Pos};
 
 use super::{agent::Agent, Entity, EntityId, EntityType};
 
@@ -17,14 +17,14 @@ impl Building {
         }
     }
 
-    pub fn initialize(&mut self, pos: Pos, entities: &mut Vec<Entity>) {
+    pub fn initialize(&mut self, pos: Pos, entities: &mut Vec<Entity>, config: &Config) {
         match self {
             Building::Hut {
                 is_agent_in: _,
                 agent,
             } if agent.is_uninitialized() => {
                 *agent = EntityId::new(entities.len());
-                let mut a = Agent::default();
+                let mut a = Agent::new(config);
                 a.in_building = true;
                 a.state = super::agent::AgentState::BeHome;
                 a.home = pos;

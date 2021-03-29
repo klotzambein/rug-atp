@@ -6,7 +6,10 @@ use rand::{
     Rng,
 };
 
-use crate::world::{Pos, World};
+use crate::{
+    config::Config,
+    world::{Pos, World},
+};
 use crate::{market::Market, tile::TileType};
 
 use super::{
@@ -15,27 +18,27 @@ use super::{
     Entity, EntityId, EntityType,
 };
 
-pub const DAY_LENGTH: u16 = 200;
+// pub const world.config.day_length: u16 = 200;
 
-pub const INITIAL_ENERGY: u32 = 5000;
-pub const CRITICAL_ENERGY: u32 = 1000;
-pub const MAX_ENERGY: u32 = 10000;
+// pub const world.config.initial_energy: u32 = 5000;
+// pub const world.config.critical_energy: u32 = 1000;
+// pub const world.config.max_energy: u32 = 10000;
 
-pub const INITIAL_CASH: u32 = 5000;
-pub const CLOSING_TIME: u16 = (DAY_LENGTH * 3) / 4;
-pub const TIMEOUT_QUOTA: u16 = (DAY_LENGTH as u16) * 10;
+// pub const world.config.initial_cash: u32 = 5000;
+// pub const world.config.closing_time: u16 = (world.config.day_length * 3) / 4;
+// pub const world.config.timeout_quota: u16 = (world.config.day_length as u16) * 10;
 
-pub const NUTRITION_SUB: u8 = 9;
-pub const NUTRITION_ADD: u8 = 4;
+// pub const world.config.nutrition_sub: u8 = 9;
+// pub const world.config.nutrition_add: u8 = 4;
 
-pub const SEARCH_RADIUS: usize = 15;
-pub const UNSTUCKIFIER_CHANCE: f64 = 0.75;
-pub const EXPLORATION_TIMEOUT: u16 = 500;
-pub const GREED_MEAN: f32 = 5.;
-pub const GREED_SD: f32 = 10.;
+// pub const world.config.search_radius: usize = 15;
+// pub const world.config.unstuckifier_chance: f64 = 0.75;
+// pub const world.config.exploration_timeout: u16 = 500;
+// pub const world.config.greed_mean: f32 = 5.;
+// pub const world.config.greed_sd: f32 = 10.;
 
-pub const INITIAL_NUTRITION: u8 = 100;
-pub const INITIAL_INVENTORY: u32 = 0;
+// pub const world.config.initial_nutrition: u8 = 100;
+// pub const world.config.initial_inventory: u32 = 0;
 
 #[derive(Debug, Clone, Hash)]
 pub struct Agent {
@@ -99,14 +102,14 @@ impl Agent {
                 count: 0,
                 observations: Default::default(),
             };
-            self.timeout_quota = TIMEOUT_QUOTA;
+            self.timeout_quota = world.config.timeout_quota;
         }
 
         match self.state {
             AgentState::GoHome => match self.path_find(pos, Some(self.home), world) {
                 Ok(h) => {
                     self.state = AgentState::BeHome;
-                    self.update_quotas();
+                    self.update_quotas(&world.config);
                     AgentAction::Enter(h)
                 }
                 Err(a) => {
@@ -126,7 +129,7 @@ impl Agent {
                 }
             },
             AgentState::BeHome => {
-                if self.energy < INITIAL_ENERGY {
+                if self.energy < world.config.initial_energy {
                     if let Some(_meal_plan) = &self.meal_plan {
                         for r in ResourceItem::iterator() {
                             if _meal_plan[*r] > 0 && self.inventory[*r] > 0 {
@@ -158,7 +161,9 @@ impl Agent {
                 }
             }
             AgentState::DoJob => {
-                if self.energy < CRITICAL_ENERGY || world.time_of_day() > CLOSING_TIME {
+                if self.energy < world.config.critical_energy
+                    || world.time_of_day() > world.config.closing_time
+                {
                     self.state = AgentState::GoHome;
                 }
                 self.do_job(pos, world)
@@ -179,7 +184,9 @@ impl Agent {
                 }
             }
             AgentState::TradeOnMarket => {
-                if self.energy > CRITICAL_ENERGY && world.time_of_day() < CLOSING_TIME {
+                if self.energy > world.config.critical_energy
+                    && world.time_of_day() < world.config.closing_time
+                {
                     if let Some(action) = self.trade_on_market(pos, world) {
                         return action;
                     }
@@ -205,10 +212,11 @@ impl Agent {
                 if boat.is_some() {
                     // if on sand: go water
                     if let TileType::Sand = world.tile_type(pos) {
-                        let target =
-                            world.find_tile_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, |p| {
-                                world.tile_type(p) == TileType::Water
-                            });
+                        let target = world.find_tile_around(
+                            pos,
+                            world.config.search_radius * world.config.search_radius,
+                            |p| world.tile_type(p) == TileType::Water,
+                        );
                         return self
                             .path_find(pos, target, world)
                             .map(|p| {
@@ -226,10 +234,11 @@ impl Agent {
                 }
 
                 // First find a boat and enter it
-                let target_pos =
-                    world.find_entity_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, |e| {
-                        matches!(e.ty, EntityType::Building(Building::Boat { .. }))
-                    });
+                let target_pos = world.find_entity_around(
+                    pos,
+                    world.config.search_radius * world.config.search_radius,
+                    |e| matches!(e.ty, EntityType::Building(Building::Boat { .. })),
+                );
 
                 let pf = self.path_find(pos, target_pos, world);
 
@@ -242,20 +251,24 @@ impl Agent {
                 observations,
                 count,
             } => {
-                world.find_entity_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, |e| {
-                    // matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
-                    match &e.ty {
-                        EntityType::Resource(r) => {
-                            observations[r.product()] += r.available() as u32 / 10
+                world.find_entity_around(
+                    pos,
+                    world.config.search_radius * world.config.search_radius,
+                    |e| {
+                        // matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
+                        match &e.ty {
+                            EntityType::Resource(r) => {
+                                observations[r.product()] += r.available() as u32 / 10
+                            }
+                            EntityType::Building(Building::Boat { .. }) => observations.fish += 30,
+                            _ => (),
                         }
-                        EntityType::Building(Building::Boat { .. }) => observations.fish += 30,
-                        _ => (),
-                    }
-                    false
-                });
+                        false
+                    },
+                );
 
                 *count += 1;
-                if *count == EXPLORATION_TIMEOUT {
+                if *count == world.config.exploration_timeout {
                     let mut max_freq: u32 = 0;
                     let mut best_item: ResourceItem = ResourceItem::Berry;
                     for (resource, observation) in observations.iter() {
@@ -328,17 +341,17 @@ impl Agent {
 
     // Every time an agent gets home (finishes the working day), they set an energy quota
     // for the next day
-    pub fn update_quotas(&mut self) -> () {
+    pub fn update_quotas(&mut self, config: &Config) -> () {
         // If the agent's energy is above the baseline, their goal for the next day is simply not to
         // lose any more energy
-        if self.energy >= INITIAL_ENERGY {
+        if self.energy >= config.initial_energy {
             self.energy_quota = self.energy;
             return;
         }
 
         // Otherwise, the agent has to compensate - they need to increase their energy the next day
         // by p%, where p is (5000 - energy) / 100
-        let mut p: f32 = (INITIAL_ENERGY - self.energy) as f32;
+        let mut p: f32 = (config.initial_energy - self.energy) as f32;
         p /= 10000.0;
 
         let quota_f32 = (self.energy as f32) * (1.0 + p);
@@ -346,7 +359,7 @@ impl Agent {
 
         // Update the cash quota with respect to the greed
         if self.cash >= self.cash_quota {
-            self.timeout_quota = TIMEOUT_QUOTA;
+            self.timeout_quota = config.timeout_quota;
         }
 
         let desired_profit: f32 = (self.greed as f32) / 100.0;
@@ -493,7 +506,11 @@ impl Agent {
         f: impl FnMut(&Entity) -> bool,
     ) -> Result<Pos, AgentAction> {
         if target.is_none() {
-            *target = world.find_entity_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, f);
+            *target = world.find_entity_around(
+                pos,
+                world.config.search_radius * world.config.search_radius,
+                f,
+            );
         }
 
         self.path_find(pos, *target, world)
@@ -501,13 +518,17 @@ impl Agent {
 
     /// This function will return actions that lead to the agents locating a resource and farming it.
     pub fn find_and_farm(&mut self, world: &World, pos: Pos, item: ResourceItem) -> AgentAction {
-        let target_pos = world.find_entity_around(pos, SEARCH_RADIUS * SEARCH_RADIUS, |e| {
-            if let EntityType::Resource(r) = &e.ty {
-                r.produces_item(item) && r.available() > 0
-            } else {
-                false
-            }
-        });
+        let target_pos = world.find_entity_around(
+            pos,
+            world.config.search_radius * world.config.search_radius,
+            |e| {
+                if let EntityType::Resource(r) = &e.ty {
+                    r.produces_item(item) && r.available() > 0
+                } else {
+                    false
+                }
+            },
+        );
 
         let pf = self.path_find(pos, target_pos, world);
 
@@ -531,7 +552,7 @@ impl Agent {
         world: &World,
     ) -> Result<Pos, AgentAction> {
         let mut rng = rand::thread_rng();
-        let unstuckifier = Bernoulli::new(UNSTUCKIFIER_CHANCE).unwrap();
+        let unstuckifier = Bernoulli::new(world.config.unstuckifier_chance).unwrap();
 
         if let Some(target) = target {
             if target.is_adjacent(pos) {
@@ -572,45 +593,44 @@ impl Agent {
         self.inventory[resource] += amount;
     }
 
-    pub fn consume(&mut self, resource: ResourceItem, quantity: u32) {
+    pub fn consume(&mut self, resource: ResourceItem, quantity: u32, config: &Config) {
         assert!(self.inventory[resource] > 0);
         self.inventory[resource] = self.inventory[resource].saturating_sub(quantity);
         self.energy += (self.nutrition[resource] as u32) * quantity;
-        if self.energy > MAX_ENERGY {
-            self.energy = MAX_ENERGY;
+        if self.energy > config.max_energy {
+            self.energy = config.max_energy;
         }
 
         for (r, n) in self.nutrition.iter_mut() {
             if r == resource {
-                *n = n.saturating_sub(NUTRITION_SUB.saturating_mul(quantity.min(255) as u8));
+                *n = n.saturating_sub(config.nutrition_sub.saturating_mul(quantity.min(255) as u8));
             } else {
-                *n = n.saturating_add(NUTRITION_ADD.saturating_mul(quantity.min(255) as u8));
+                *n = n.saturating_add(config.nutrition_add.saturating_mul(quantity.min(255) as u8));
             }
         }
     }
-}
 
-impl Default for Agent {
-    fn default() -> Self {
-        let greed =
-            (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * GREED_MEAN + GREED_SD).max(0.) as u32;
+    pub fn new(config: &Config) -> Self {
+        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * config.greed_mean
+            + config.greed_sd)
+            .max(0.) as u32;
         Agent {
             job: random(),
             state: AgentState::DoJob,
             home: Pos::default(),
-            nutrition: PerResource::new(INITIAL_NUTRITION),
-            inventory: PerResource::new(INITIAL_INVENTORY),
-            energy: INITIAL_ENERGY,
-            energy_quota: INITIAL_ENERGY,
+            nutrition: PerResource::new(config.initial_nutrition),
+            inventory: PerResource::new(config.initial_inventory),
+            energy: config.initial_energy,
+            energy_quota: config.initial_energy,
             // TODO draw this from a normal distribution
             greed,
             meal_plan: None,
             shopping_list: None,
-            cash: INITIAL_CASH,
-            cash_quota: INITIAL_CASH,
+            cash: config.initial_cash,
+            cash_quota: config.initial_cash,
             in_building: false,
             dead: false,
-            timeout_quota: TIMEOUT_QUOTA,
+            timeout_quota: config.timeout_quota,
         }
     }
 }

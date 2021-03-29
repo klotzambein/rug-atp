@@ -1,8 +1,10 @@
 use std::{cell::RefCell, rc::Rc, time::Instant};
 
+use config::Config;
 use dear_gui::AppInit;
 use glium::Surface;
 
+pub mod config;
 pub mod entity;
 pub mod generation;
 pub mod grid;
@@ -23,6 +25,7 @@ fn main() {
     let mut app = AppInit::new();
 
     let stats = Rc::new(RefCell::new(Statistics::default()));
+    let config = Rc::new(Config::default());
 
     let ui = Rc::new(RefCell::new(UI::new(app.imgui.clone(), stats.clone())));
 
@@ -31,6 +34,7 @@ fn main() {
         WORLD_CHUNK_LEN * 32,
         WORLD_CHUNK_LEN * 32,
         &mut rand::thread_rng(),
+        config,
     )));
 
     app.set_canvas_click_handler({
@@ -63,14 +67,6 @@ fn main() {
             }
         })
     });
-
-    const PRE_RUN_STEPS: usize = 0; //50_000;
-    for i in 0..PRE_RUN_STEPS {
-        if i % 1000 == 0 {
-            println!("{}%", i as f32 / PRE_RUN_STEPS as f32 * 100.);
-        }
-        world.borrow_mut().step(&mut *stats.borrow_mut());
-    }
 
     let mut tps = 2.;
     let mut seconds = 0.0;
