@@ -17,7 +17,7 @@ pub struct Market {
 
 impl Market {
     pub fn step(&mut self, tick: u32, mut _expire: impl FnMut(&Order, ResourceItem)) {
-        if tick % 200 == 0 {
+        if tick % DAY_LENGTH == 0 {
             self.market_demand = Default::default();
         }
 

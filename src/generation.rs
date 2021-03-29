@@ -146,7 +146,7 @@ impl TileDistribution {
                 ),
                 (
                     TileType::Grass,
-                    Some(EntityType::Resource(Resource::new(ResourceItem::Meat, 20))),
+                    Some(EntityType::Resource(Resource::new(ResourceItem::Meat, RESOURCE_AMOUNT_MEAN as u16))),
                 ),
             ],
             // TODO IVO: Don't forget to update the weights
