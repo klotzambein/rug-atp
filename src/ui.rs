@@ -88,6 +88,9 @@ impl UI {
         Window::new(im_str!("Inspector"))
             .size([250., 500.], Condition::Once)
             .build(ui, || {
+                if ui.button(im_str!("Select alive"), [100., 30.]) {
+                    self.selected_entity = world.random_alive();
+                }
                 if let Some(e_id) = self.selected_entity {
                     let e = world.entity(e_id);
                     ui.text(&format!("Position: {:?}", e.pos));
@@ -107,9 +110,6 @@ impl UI {
                     ));
                 } else {
                     ui.text("Nothing selected");
-                }
-                if ui.button(im_str!("Select alive"), [100., 30.]) {
-                    self.selected_entity = world.random_alive();
                 }
             });
     }

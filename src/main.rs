@@ -1,8 +1,9 @@
-use std::{cell::RefCell, rc::Rc, time::Instant};
+use std::{cell::RefCell, io::Write, path::PathBuf, rc::Rc, time::Instant};
 
 use config::Config;
 use dear_gui::AppInit;
 use glium::Surface;
+use rayon::prelude::*;
 
 pub mod config;
 pub mod entity;
@@ -21,11 +22,93 @@ use world::{Pos, World};
 
 const WORLD_CHUNK_LEN: usize = 30;
 
-fn main() {
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(
+    name = "rug-atp",
+    about = "RUG Agent Technology Practical",
+    author = "By Andrei, Ivo, and Robin"
+)]
+enum Opt {
+    Interactive { config: Option<PathBuf> },
+    Batch { configs: PathBuf, output: PathBuf },
+    ExportConf { path: PathBuf },
+}
+
+fn main() -> std::io::Result<()> {
+    match Opt::from_args() {
+        Opt::Interactive { config } => {
+            let config = if let Some(path) = config {
+                let string = std::fs::read_to_string(path)?;
+                serde_json::from_str(&string)?
+            } else {
+                Config::default()
+            };
+
+            interactive(config);
+        }
+        Opt::Batch { configs, output } => {
+            let mut cs = Vec::new();
+            for f in std::fs::read_dir(configs)? {
+                let path = f?.path();
+                if let Some("json") = path.extension().and_then(|e| e.to_str()) {
+                    let string = std::fs::read_to_string(&path)?;
+                    let config: Config = serde_json::from_str(&string)?;
+
+                    let file_stem = path.file_stem().unwrap().to_str().expect("Invalid name");
+
+                    for i in 0..config.repetitions {
+                        let mut o_path = output.clone();
+                        o_path.push(&format!("{}_{}", file_stem, i));
+
+                        cs.push((config.clone(), o_path))
+                    }
+                }
+            }
+
+            batch(cs);
+        }
+        Opt::ExportConf { path } => {
+            let config = Config::default();
+            let string = serde_json::to_string_pretty(&config)?;
+            std::fs::File::create(path)?.write_all(string.as_ref())?;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn batch(configs: Vec<(Config, PathBuf)>) {
+    configs.into_par_iter().for_each(|(config, out)| {
+        let config = Rc::new(config);
+        let stats = Rc::new(RefCell::new(Statistics::new()));
+        let mut world = World::new(
+            WORLD_CHUNK_LEN * 32,
+            WORLD_CHUNK_LEN * 32,
+            &mut rand::thread_rng(),
+            config.clone(),
+            &mut *stats.borrow_mut(),
+        );
+        let update_interval = config.batch_total_step_count / 100;
+        for i in 0..config.batch_total_step_count {
+            if i % update_interval == 0 {
+                println!("{:?}: {}%", out, i / update_interval);
+            }
+            world.step(&mut *stats.borrow_mut());
+        }
+        stats
+            .borrow()
+            .export(&out)
+            .expect("Error exporting results");
+    });
+}
+
+pub fn interactive(config: Config) {
     let mut app = AppInit::new();
 
-    let stats = Rc::new(RefCell::new(Statistics::default()));
-    let config = Rc::new(Config::default());
+    let stats = Rc::new(RefCell::new(Statistics::new()));
+    let config = Rc::new(config);
 
     let ui = Rc::new(RefCell::new(UI::new(app.imgui.clone(), stats.clone())));
 
@@ -35,6 +118,7 @@ fn main() {
         WORLD_CHUNK_LEN * 32,
         &mut rand::thread_rng(),
         config,
+        &mut *stats.borrow_mut(),
     )));
 
     app.set_canvas_click_handler({

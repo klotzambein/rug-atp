@@ -18,28 +18,6 @@ use super::{
     Entity, EntityId, EntityType,
 };
 
-// pub const world.config.day_length: u16 = 200;
-
-// pub const world.config.initial_energy: u32 = 5000;
-// pub const world.config.critical_energy: u32 = 1000;
-// pub const world.config.max_energy: u32 = 10000;
-
-// pub const world.config.initial_cash: u32 = 5000;
-// pub const world.config.closing_time: u16 = (world.config.day_length * 3) / 4;
-// pub const world.config.timeout_quota: u16 = (world.config.day_length as u16) * 10;
-
-// pub const world.config.nutrition_sub: u8 = 9;
-// pub const world.config.nutrition_add: u8 = 4;
-
-// pub const world.config.search_radius: usize = 15;
-// pub const world.config.unstuckifier_chance: f64 = 0.75;
-// pub const world.config.exploration_timeout: u16 = 500;
-// pub const world.config.greed_mean: f32 = 5.;
-// pub const world.config.greed_sd: f32 = 10.;
-
-// pub const world.config.initial_nutrition: u8 = 100;
-// pub const world.config.initial_inventory: u32 = 0;
-
 #[derive(Debug, Clone, Hash)]
 pub struct Agent {
     /// This contains the agents job, and all variables associated with said
@@ -91,19 +69,12 @@ impl Agent {
             return AgentAction::None;
         }
 
-        self.energy = self.energy.saturating_sub(2);
+        self.energy = self.energy.saturating_sub(world.config.energy_cost);
         if self.energy == 0 {
             return AgentAction::Die;
         }
 
         self.timeout_quota = self.timeout_quota.saturating_sub(1);
-        if self.timeout_quota == 0 {
-            self.job = Job::Explorer {
-                count: 0,
-                observations: Default::default(),
-            };
-            self.timeout_quota = world.config.timeout_quota;
-        }
 
         match self.state {
             AgentState::GoHome => match self.path_find(pos, Some(self.home), world) {
@@ -184,8 +155,7 @@ impl Agent {
                 }
             }
             AgentState::TradeOnMarket => {
-                if self.energy > world.config.critical_energy
-                    && world.time_of_day() < world.config.closing_time
+                if world.time_of_day() < world.config.closing_time
                 {
                     if let Some(action) = self.trade_on_market(pos, world) {
                         return action;
@@ -258,9 +228,9 @@ impl Agent {
                         // matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
                         match &e.ty {
                             EntityType::Resource(r) => {
-                                observations[r.product()] += r.available() as u32 / 10
+                                observations[r.product()] += r.available() as u32 / world.config.explorer_resource_divisor
                             }
-                            EntityType::Building(Building::Boat { .. }) => observations.fish += 30,
+                            EntityType::Building(Building::Boat { .. }) => observations.fish += world.config.explorer_fish_points,
                             _ => (),
                         }
                         false
@@ -357,11 +327,19 @@ impl Agent {
         let quota_f32 = (self.energy as f32) * (1.0 + p);
         self.energy_quota = quota_f32.ceil() as u32;
 
-        // Update the cash quota with respect to the greed
         if self.cash >= self.cash_quota {
             self.timeout_quota = config.timeout_quota;
         }
 
+        if self.timeout_quota == 0 {
+            self.job = Job::Explorer {
+                count: 0,
+                observations: Default::default(),
+            };
+            self.timeout_quota = config.timeout_quota;
+        }
+        
+        // Update the cash quota with respect to the greed
         let desired_profit: f32 = (self.greed as f32) / 100.0;
         self.cash_quota = self.cash + ((self.cash as f32) * desired_profit) as u32;
     }

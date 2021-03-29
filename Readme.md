@@ -16,3 +16,6 @@ agent to tile. Both agents and tiles are stored in one continous vector each.
 Every step each agent specifies the action it would like to do. Then all the
 confilcts are resolved and finally all the actions are applied and the next step
 is started.
+
+## Media used
+[Random pixel characters](https://opengameart.org/content/random-pixel-characters) by [icedman](https://opengameart.org/users/icedman)

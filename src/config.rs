@@ -1,4 +1,6 @@
-#[derive(Debug, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub ocean_cutoff: isize,
     pub beach_cutoff: isize,
@@ -16,15 +18,20 @@ pub struct Config {
     pub initial_nutrition: u8,
     pub market_price_update: f32,
     pub max_energy: u32,
+    pub energy_cost: u32,
     pub nutrition_add: u8,
     pub nutrition_sub: u8,
     pub order_price_decay: u32,
     pub resource_amount_mean: f32,
     pub resource_amount_sd: f32,
+    pub explorer_fish_points: u32,
+    pub explorer_resource_divisor: u32,
     pub resource_timeout: u16,
     pub search_radius: usize,
     pub timeout_quota: u16,
     pub unstuckifier_chance: f64,
+    pub batch_total_step_count: u32,
+    pub repetitions: u32,
 }
 
 impl Default for Config {
@@ -34,28 +41,33 @@ impl Default for Config {
             ocean_cutoff: -300,
             beach_cutoff: -250,
             closing_time: (DAY_LENGTH * 3) / 4,
-            critical_energy: 1000,
+            critical_energy: 500,
             day_length: DAY_LENGTH,
             default_exp: DAY_LENGTH * 10,
             default_rval: DAY_LENGTH * 3,
             exploration_timeout: 500,
             greed_mean: 5.,
             greed_sd: 10.,
-            initial_cash: 5000,
+            initial_cash: 20000,
             initial_energy: 5000,
             initial_inventory: 0,
             initial_nutrition: 100,
             market_price_update: 0.01,
             max_energy: 10000,
+            energy_cost: 2,
             nutrition_add: 4,
             nutrition_sub: 9,
             order_price_decay: 75,
             resource_amount_mean: 20.,
             resource_amount_sd: 10.,
             resource_timeout: DAY_LENGTH as u16 * 10,
+            explorer_fish_points: 50,
+            explorer_resource_divisor: 10,
             search_radius: 15,
-            timeout_quota: (DAY_LENGTH as u16) * 10,
+            timeout_quota: DAY_LENGTH as u16 * 10,
             unstuckifier_chance: 0.75,
+            batch_total_step_count: DAY_LENGTH * 5000,
+            repetitions: 1,
         }
     }
 }

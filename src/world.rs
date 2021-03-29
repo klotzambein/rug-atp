@@ -42,7 +42,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(width: usize, height: usize, rng: &mut impl Rng, config: Rc<Config>) -> World {
+    pub fn new(width: usize, height: usize, rng: &mut impl Rng, config: Rc<Config>, stats: &mut Statistics) -> World {
         let biomes = BiomeMap::new(&config);
 
         let mut entities = Vec::new();
@@ -65,6 +65,9 @@ impl World {
             .iter()
             .filter(|e| matches!(e.ty, EntityType::Agent(_)))
             .count() as u32;
+
+        stats.init_agents(&entities);
+
         World {
             tiles_type,
             tiles_entity,
@@ -198,6 +201,7 @@ impl World {
             match &mut entity.ty {
                 EntityType::Agent(a) => {
                     self.step_agent(a, &mut entity.pos, id);
+                    stats.step_agent(&a, id.as_index());
                 }
                 EntityType::Resource(r) => {
                     self.step_resource(r, &mut entity.pos, i);
@@ -393,12 +397,14 @@ impl World {
                 r.timeout = self.config.resource_timeout;
                 self.tiles_entity[current_tile_idx] = None;
             } else if r.timeout == 1 {
-                self.tiles_entity[current_tile_idx] = Some(EntityId::new(idx));
-                r.timeout = 0;
-                r.amount = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal)
-                    * self.config.resource_amount_sd
-                    + self.config.resource_amount_mean)
-                    .max(0.) as u16;
+                if self.tiles_entity[current_tile_idx].is_none() {
+                    self.tiles_entity[current_tile_idx] = Some(EntityId::new(idx));
+                    r.timeout = 0;
+                    r.amount = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal)
+                        * self.config.resource_amount_sd
+                        + self.config.resource_amount_mean)
+                        .max(0.) as u16;
+                }
             } else {
                 r.timeout -= 1;
             }
