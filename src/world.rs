@@ -1,3 +1,7 @@
+//! This module contains the World struct which holds all the simulation state.
+//! This file ties together the simulation of agents, markets, etc. and performs
+//! some other tasks.
+
 use std::rc::Rc;
 
 use dear_gui::graphics::primitives::{Sprite, Vf2};
@@ -19,30 +23,49 @@ use crate::{
     tile::TileType,
 };
 
-// pub const RESOURCE_TIMEOUT: u16 = DAY_LENGTH as u16 * 10;
-// pub const RESOURCE_AMOUNT_SD: f32 = 10.;
-// pub const RESOURCE_AMOUNT_MEAN: f32 = 20.;
-
+/// This struct holds all the simulation state. And defines the root step
+/// function.
 pub struct World {
+    /// Configuration of this simulation
     pub config: Rc<Config>,
+    /// The tile types of the entire map. The length is width x height. For more
+    /// details see tile.rs
     pub tiles_type: Vec<TileType>,
+    /// The tile entities of the entire map. The length is width x height. For
+    /// more details see tile.rs
     pub tiles_entity: Vec<Option<EntityId>>,
-    // tiles_resource: Vec<u8>,
-    // tiles_action: Vec<TileAction>,
+    /// All the entities are in this array. This is in one place to hopefully
+    /// improve cache locality. Entities do not get added or deleted after
+    /// initialization.
     entities: Vec<Entity>,
+    /// The global market
     pub market: Market,
-    // conflicts: Vec<Vec<TileAction>>,
+    /// Width of the world in tiles
     pub width: usize,
+    /// Height of the world in tiles
     pub height: usize,
+    /// This flag will be set if the tiles_type variable changes, so we can
+    /// avoid having to reupload the chunks to the gpu.
     pub dirty: bool,
+    /// Current tick counter.
     pub tick: u32,
+    /// Is the simulation running?
     pub is_running: bool,
+    /// Running count of alive agents. Not correct while stepping.
     pub alive_count: u32,
+    /// Count of alive agents at the beginning of the simulation.
     pub start_count: u32,
 }
 
 impl World {
-    pub fn new(width: usize, height: usize, rng: &mut impl Rng, config: Rc<Config>, stats: &mut Statistics) -> World {
+    pub fn new(
+        width: usize,
+        height: usize,
+        rng: &mut impl Rng,
+        config: Rc<Config>,
+        stats: &mut Statistics,
+    ) -> World {
+        // Generate the terrain using Noise functions and tile distributions
         let biomes = BiomeMap::new(&config);
 
         let mut entities = Vec::new();
@@ -66,16 +89,14 @@ impl World {
             .filter(|e| matches!(e.ty, EntityType::Agent(_)))
             .count() as u32;
 
+        // Initialize the stats agents
         stats.init_agents(&entities);
 
         World {
             tiles_type,
             tiles_entity,
-            // tiles_resource: vec![0; width * height],
-            // tiles_action: vec![TileAction::default(); width * height],
             entities,
             market: Market::default(),
-            // conflicts: Vec::new(),
             width,
             height,
             dirty: true,
@@ -87,6 +108,7 @@ impl World {
         }
     }
 
+    /// Get an index into the tiles vectors from a position.
     pub fn idx(&self, p: Pos) -> usize {
         let x = p.x as usize;
         let y = p.y as usize;
@@ -94,6 +116,7 @@ impl World {
         x + y * self.width
     }
 
+    /// Get all the neighboring positions. These positions are properly wrapped.
     pub fn neighbors(&self, pos: Pos) -> [Pos; 8] {
         let x = pos.x as usize;
         let y = pos.y as usize;
@@ -115,6 +138,7 @@ impl World {
         ]
     }
 
+    /// Wrap a position to be on the world.
     pub fn wrap_pos(&self, x: isize, y: isize) -> Pos {
         Pos::new(
             x.rem_euclid(self.width as isize) as i16,
@@ -149,6 +173,7 @@ impl World {
             .find(|p| f(*p))
     }
 
+    /// Wrapper around [`World::find_tile_around`] to find an entity.
     pub fn find_entity_around(
         &self,
         p: Pos,
@@ -164,16 +189,19 @@ impl World {
         })
     }
 
+    /// Get a reference to an entity from an entity
     pub fn entity(&self, id: EntityId) -> &Entity {
         &self.entities[id.as_index()]
     }
 
+    /// Execute one step, if the simulation is running.
     pub fn step(&mut self, stats: &mut Statistics) {
         if self.is_running {
             self.step_once(stats)
         }
     }
 
+    /// Select a random agent that is alive.
     pub fn random_alive(&self) -> Option<EntityId> {
         self.entities
             .iter()
@@ -183,7 +211,9 @@ impl World {
             .choose(&mut thread_rng())
     }
 
+    /// Step one step, regardless of the running flag.
     pub fn step_once(&mut self, stats: &mut Statistics) {
+        // Step the market, this resets the demand and recalculates the order prices.
         {
             let es = &mut self.entities;
             self.market.step(self.tick, |o, r| {
@@ -193,8 +223,10 @@ impl World {
             });
         }
 
+        // set the alive count to zero, we add one for every agent
         self.alive_count = 0;
 
+        // Step all the entities
         for i in 0..self.entities.len() {
             let mut entity = self.entities[i].clone();
             let id = EntityId::new(i);
@@ -210,11 +242,17 @@ impl World {
             }
             self.entities[i] = entity;
         }
+
+        // increase tick counter.
         self.tick += 1;
+
+        // step the statistics recording most values
         stats.step(self);
     }
 
+    /// This function ties the agents into the simulation, also look at Agent::step.
     fn step_agent(&mut self, a: &mut Agent, pos: &mut Pos, id: EntityId) {
+        // do nothing if the agent is dead
         if a.dead {
             return;
         }
@@ -222,6 +260,8 @@ impl World {
         self.alive_count += 1;
 
         let current_tile_idx = self.idx(*pos);
+
+        // Execute the agent action
         match a.step(*pos, &self) {
             AgentAction::Move(p) => {
                 assert!(!a.in_building);

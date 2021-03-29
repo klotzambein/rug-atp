@@ -1,3 +1,6 @@
+//! Saves statistics of a simulation, this is used to display graphs in the
+//! interactive mode and export data for science
+
 use std::{
     io::{Result, Write},
     path::Path,
@@ -11,13 +14,22 @@ use crate::{
     },
     world::World,
 };
+
+/// Saves statistics of a simulation, this is used to display graphs in the
+/// interactive mode and export data for science
 #[derive(Debug, Clone)]
 pub struct Statistics {
+    /// Prices per tick
     pub prices: PerResource<Vec<f32>>,
+    /// Market volume per tick. Volume is the total amount of resources.
     pub volume: PerResource<Vec<f32>>,
+    /// Count of alive agents per tick
     pub agent_count: Vec<f32>,
+    /// Average greed of the alive agents per tick
     pub agent_greed: Vec<f32>,
+    /// Distribution of jobs of alive agents
     pub job_counts: [Vec<f32>; 5],
+    /// For every agent save the greed value and the time of death.
     pub agents: Vec<Option<(u32, u32)>>,
 }
 
@@ -27,12 +39,14 @@ impl Statistics {
             prices: Default::default(),
             volume: Default::default(),
             agent_count: Default::default(),
+            // agent greed and job counts should have one zero element
             agent_greed: vec![0.0],
             job_counts: [vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0]],
             agents: Vec::new(),
         }
     }
 
+    /// Call this to initialize the greed of the agents.
     pub fn init_agents(&mut self, entities: &[Entity]) {
         self.agents = entities
             .iter()
@@ -44,6 +58,7 @@ impl Statistics {
             .collect();
     }
 
+    /// This should be called once per step, to record the statistics
     pub fn step(&mut self, world: &World) {
         let prices = &world.market.market_price;
         for (r, p) in self.prices.iter_mut() {
@@ -53,6 +68,9 @@ impl Statistics {
         for (r, v) in self.volume.iter_mut() {
             v.push(volumes[r] as f32);
         }
+
+        // At the end/beginning of every step divide the sum by the total and
+        // add a new element to the vector which is zero.
         self.agent_count.push(world.alive_count as f32);
         *self.agent_greed.last_mut().unwrap() /= world.alive_count as f32;
         self.agent_greed.push(0.0);
@@ -62,6 +80,8 @@ impl Statistics {
         }
     }
 
+    /// This should be called once per agent per tick, to record death and job
+    /// distribution
     pub fn step_agent(&mut self, a: &Agent, idx: usize) {
         if a.dead && self.agents[idx].unwrap().1 == 0 {
             // the length of agent_count is equal to the current step
@@ -79,6 +99,7 @@ impl Statistics {
         }
     }
 
+    /// Export all the statistics to csv files
     pub fn export(&self, path: &Path) -> Result<()> {
         let mut steps_path = path.to_path_buf();
         steps_path.set_extension("steps.csv");

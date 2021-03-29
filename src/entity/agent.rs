@@ -155,8 +155,7 @@ impl Agent {
                 }
             }
             AgentState::TradeOnMarket => {
-                if world.time_of_day() < world.config.closing_time
-                {
+                if world.time_of_day() < world.config.closing_time {
                     if let Some(action) = self.trade_on_market(pos, world) {
                         return action;
                     }
@@ -228,9 +227,12 @@ impl Agent {
                         // matches!(e.ty, EntityType::Resource(Resource::Berry(_)))
                         match &e.ty {
                             EntityType::Resource(r) => {
-                                observations[r.product()] += r.available() as u32 / world.config.explorer_resource_divisor
+                                observations[r.product()] +=
+                                    r.available() as u32 / world.config.explorer_resource_divisor
                             }
-                            EntityType::Building(Building::Boat { .. }) => observations.fish += world.config.explorer_fish_points,
+                            EntityType::Building(Building::Boat { .. }) => {
+                                observations.fish += world.config.explorer_fish_points
+                            }
                             _ => (),
                         }
                         false
@@ -338,7 +340,7 @@ impl Agent {
             };
             self.timeout_quota = config.timeout_quota;
         }
-        
+
         // Update the cash quota with respect to the greed
         let desired_profit: f32 = (self.greed as f32) / 100.0;
         self.cash_quota = self.cash + ((self.cash as f32) * desired_profit) as u32;
@@ -589,8 +591,8 @@ impl Agent {
     }
 
     pub fn new(config: &Config) -> Self {
-        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * config.greed_mean
-            + config.greed_sd)
+        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * config.greed_sd
+            + config.greed_mean)
             .max(0.) as u32;
         Agent {
             job: random(),

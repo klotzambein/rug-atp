@@ -1,10 +1,15 @@
+//! A tile is a 1x1 space in the world. Every tile has a type, and 1 or 0
+//! entities on top.
+
 use crate::entity::EntityId;
 
+/// A tile is a 1x1 space in the world. Every tile has a type, and 1 or 0
+/// entities on top.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Tile {
     pub texture: TileType,
+    /// The id of the entity on top of the tile.
     pub agent: Option<EntityId>,
-    // pub next_agent
 }
 
 impl Tile {
@@ -16,23 +21,8 @@ impl Tile {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TileAction {
-    None,
-    AgentClear,
-    AgentSet(EntityId),
-    /// Multiple actions on the same tile. Since we can not guarentee ordering we
-    /// need to handle all conflicts seperatly, this contains an index into the
-    /// conflict vector.
-    Conflict(u16),
-}
-
-impl Default for TileAction {
-    fn default() -> Self {
-        TileAction::None
-    }
-}
-
+/// The tile types correspond to the texture in our sprite map, most of them are
+/// unused.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TileType {
@@ -70,6 +60,7 @@ pub enum TileType {
 }
 
 impl TileType {
+    /// Return the texture index
     pub fn texture(self) -> i32 {
         match self {
             TileType::Grass => 00,
@@ -103,36 +94,37 @@ impl TileType {
         }
     }
 
+    /// True for tiles agents can walk on, if there is no entity on top.
     pub fn walkable(self) -> bool {
         match self {
-            TileType::Grass => true,
-            TileType::GrassTreeA => false,
-            TileType::GrassTreeB => false,
-            TileType::GrassRock => false,
-            TileType::Snow => true,
-            TileType::SnowTree => false,
-            TileType::SnowRock => false,
-            TileType::Water => false,
-            TileType::Sand => true,
-            TileType::SandPalm => false,
-            TileType::SandRock => false,
-            TileType::SandTreeDead => false,
-            TileType::Tundra => true,
-            TileType::TundraTreeDead => false,
-            TileType::TundraTree => false,
-            TileType::WaterRock => false,
-            TileType::Dirt => true,
-            TileType::DirtTreeDead => false,
-            TileType::DirtRock => false,
-            TileType::WoodHorizontal => true,
-            TileType::WoodVertical => true,
-            TileType::Mud => true,
-            TileType::MudDried => true,
-            TileType::Lava => false,
-            TileType::Sludge => false,
-            TileType::SludgeDried => true,
-            TileType::Rock => true,
-            TileType::Brick => true,
+            TileType::Grass
+            | TileType::Snow
+            | TileType::Sand
+            | TileType::Tundra
+            | TileType::Dirt
+            | TileType::WoodHorizontal
+            | TileType::WoodVertical
+            | TileType::Mud
+            | TileType::MudDried
+            | TileType::SludgeDried
+            | TileType::Rock
+            | TileType::Brick => true,
+            TileType::GrassTreeA
+            | TileType::GrassTreeB
+            | TileType::GrassRock
+            | TileType::SnowTree
+            | TileType::SnowRock
+            | TileType::Water
+            | TileType::SandPalm
+            | TileType::SandRock
+            | TileType::SandTreeDead
+            | TileType::TundraTreeDead
+            | TileType::TundraTree
+            | TileType::WaterRock
+            | TileType::DirtTreeDead
+            | TileType::DirtRock
+            | TileType::Lava
+            | TileType::Sludge => false,
         }
     }
 }

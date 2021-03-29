@@ -1,3 +1,6 @@
+//! This module defines all the ui code based on imgui. To understand this code
+//! take a look at *dear imgui*.
+
 use std::{cell::RefCell, rc::Rc, time::Instant};
 
 use dear_gui::event_handling::Imgui;
@@ -9,7 +12,8 @@ use crate::{
     statistics::Statistics,
     world::{Pos, World},
 };
-// We have idx_tile: usize -> world.tiles_type[idx_tile]: TileTexture -> get name through debug: String/str
+
+/// Wrapper around imgui with some gui relevant state.
 pub struct UI {
     pub imgui: Rc<RefCell<Imgui>>,
     pub selected_entity: Option<EntityId>,
@@ -27,6 +31,7 @@ impl UI {
         }
     }
 
+    /// Draw the ui on the GL framebuffer.
     pub fn draw(
         &mut self,
         last_frame: Instant,
