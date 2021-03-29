@@ -40,11 +40,11 @@ for _data in data:
     _data["agent_count"] = (_data["agent_count"] / _data["agent_count"].max()) * 3000
     # Job Counts
     plt.figure()
-    plt.plot(_data.index, _data["job_counts_explorer"], linewidth=1.0, label="Explorer")
-    plt.plot(_data.index, _data["job_counts_farmer"], linewidth=1.0, label="Farmer")
-    plt.plot(_data.index, _data["job_counts_lumberer"], linewidth=1.0, label="Lumberer")
-    plt.plot(_data.index, _data["job_counts_fisher"], linewidth=1.0, label="Fisher")
-    plt.plot(_data.index, _data["job_counts_butcher"], linewidth=1.0, label="Butcher")
+    plt.plot(_data.index / 200, _data["job_counts_explorer"], linewidth=1.0, label="Explorer")
+    plt.plot(_data.index / 200, _data["job_counts_farmer"], linewidth=1.0, label="Farmer")
+    plt.plot(_data.index / 200, _data["job_counts_lumberer"], linewidth=1.0, label="Lumberer")
+    plt.plot(_data.index / 200, _data["job_counts_fisher"], linewidth=1.0, label="Fisher")
+    plt.plot(_data.index / 200, _data["job_counts_butcher"], linewidth=1.0, label="Butcher")
     plt.xlabel("Time (ticks)")
     plt.ylabel("Job Frequency")
     plt.title("Job Frequency Over 10 Runs")
@@ -100,7 +100,6 @@ plt.legend()
 plt.savefig("plots/greed_scatter.png")
 
 # Cash $$$
-# Greed
 plt.figure()
 plt.scatter(baseline.index, baseline["cash"], linewidth=1.0, label="Baseline")
 plt.scatter(low.index, low["cash"], linewidth=1.0, label="Low Greed")
