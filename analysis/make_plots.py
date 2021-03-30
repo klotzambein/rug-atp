@@ -122,13 +122,13 @@ plt.savefig("analysis/plots/agent_count.png")
 
 # Greed scatter
 plt.figure()
-plt.scatter(baseline_agents["lifetime"] / 200, baseline_agents["greed"], linewidth=3., color="c", label="Baseline")
-plt.scatter(low_agents["lifetime"] / 200, low_agents["greed"], linewidth=3., color="y", label="Low Greed")
-plt.scatter(high_agents["lifetime"] / 200, high_agents["greed"], linewidth=3., color="r", label="High Greed")
+plt.scatter(baseline_agents["lifetime"] / 200, baseline_agents["greed"], color="c", label="Baseline")
+plt.scatter(low_agents["lifetime"] / 200, low_agents["greed"], color="y", label="Low Greed")
+plt.scatter(high_agents["lifetime"] / 200, high_agents["greed"], color="r", label="High Greed")
 plt.xlabel("Lifetime (days)")
 plt.ylabel("Greed")
 plt.title("Interaction between Agent Lifetime and Greed Over 10 Runs")
-plt.legend()
+plt.legend(markerscale=3.0)
 plt.savefig("analysis/plots/greed_scatter.png")
 
 # Greed over time
