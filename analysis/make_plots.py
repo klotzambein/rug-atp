@@ -71,7 +71,7 @@ for _data in data:
     plt.plot(_data.index, _data["job_counts_butcher"], label="Butcher")
     plt.xlabel("Time (days)")
     plt.ylabel("Job Frequency")
-    plt.title("Job Frequency Over 10 Runs")
+    plt.title("Job Frequency Over 10 Runs in the {} Condition".format(data_name[i].capitalize()))
     leg = plt.legend()
     for line in leg.get_lines():
         line.set_linewidth(5.0)
@@ -85,7 +85,7 @@ for _data in data:
     plt.plot(_data.index, _data["prices_meat"], color="r", label="Meat")
     plt.xlabel("Time (days)")
     plt.ylabel("Resource Price")
-    plt.title("Mean Prices Over 10 Runs")
+    plt.title("Mean Prices Over 10 Runs in the {} Condition".format(data_name[i].capitalize()))
     leg = plt.legend()
     for line in leg.get_lines():
         line.set_linewidth(5.0)
@@ -99,7 +99,7 @@ for _data in data:
     plt.plot(_data.index, _data["volume_meat"], color="r", label="Meat")
     plt.xlabel("Time (days)")
     plt.ylabel("Resource Volume")
-    plt.title("Mean Resource Volumes Over 10 Runs")
+    plt.title("Mean Resource Volumes Over 10 Runs in the {} Condition".format(data_name[i].capitalize()))
     leg = plt.legend()
     for line in leg.get_lines():
         line.set_linewidth(5.0)
@@ -109,9 +109,9 @@ for _data in data:
 
 # Alive agents
 plt.figure()
-plt.plot(baseline.index, baseline["agent_count"], linewidth=3., color="c", label="Baseline")
-plt.plot(low.index, low["agent_count"], linewidth=3., color="y", label="Low Greed")
-plt.plot(high.index, high["agent_count"], linewidth=3., color="r", label="High Greed")
+plt.plot(baseline.index, baseline["agent_count"], linewidth=4., color="c", label="Baseline")
+plt.plot(low.index, low["agent_count"], linewidth=4., color="y", label="Low Greed")
+plt.plot(high.index, high["agent_count"], linewidth=4., color="r", label="High Greed")
 plt.xlabel("Time (days)")
 plt.ylabel("Alive Agents")
 plt.title("Mean Number of Alive Agents Over 10 Runs")
@@ -133,9 +133,9 @@ plt.savefig("analysis/plots/greed_scatter.png")
 
 # Greed over time
 plt.figure()
-plt.scatter(baseline.index, baseline["agent_greed"], color="c", label="Baseline")
-plt.scatter(low.index, low["agent_greed"], color="y", label="Low Greed")
-plt.scatter(high.index, high["agent_greed"], color="r", label="High Greed")
+plt.plot(baseline.index, baseline["agent_greed"], linewidth=4., color="c", label="Baseline")
+plt.plot(low.index, low["agent_greed"], linewidth=4., color="y", label="Low Greed")
+plt.plot(high.index, high["agent_greed"], linewidth=4., color="r", label="High Greed")
 plt.xlabel("Time (days)")
 plt.ylabel("Greed")
 plt.title("Mean Greed of Alive Agents Over 10 Runs")
