@@ -2,6 +2,10 @@ use crate::{config::Config, world::Pos};
 
 use super::{agent::Agent, Entity, EntityId, EntityType};
 
+/// There are three types of buildings in the world:
+/// - Markets: Here agents go to trade.
+/// - Hut: every agent has exactly one hut they call home.
+/// - Boat: These are used by fishers to go fishing.
 #[derive(Debug, Clone, Hash)]
 pub enum Building {
     Market,
@@ -10,6 +14,8 @@ pub enum Building {
 }
 
 impl Building {
+    /// Create an uninitialized hut (without an agent). Huts should be
+    /// initialized, by calling initialize later.
     pub fn hut_uninitialized() -> Building {
         Building::Hut {
             is_agent_in: true,
@@ -17,6 +23,7 @@ impl Building {
         }
     }
 
+    /// Initialize the building (add agent to hut).
     pub fn initialize(&mut self, pos: Pos, entities: &mut Vec<Entity>, config: &Config) {
         match self {
             Building::Hut {
@@ -38,6 +45,7 @@ impl Building {
         }
     }
 
+    /// This is called when an agent enters a building.
     pub fn agent_enter(&mut self, id: EntityId) {
         match self {
             Building::Market => {}
@@ -51,6 +59,7 @@ impl Building {
         }
     }
 
+    /// This is called when an agent leaves a building.
     pub fn agent_leave(&mut self, _id: EntityId) {
         match self {
             Building::Market => {}

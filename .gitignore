@@ -2,4 +2,4 @@
 /out
 **/*.rs.bk
 
-/plots/*.png
+analysis/plots/*.png

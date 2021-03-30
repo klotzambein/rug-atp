@@ -1,12 +1,12 @@
 //! Resources are the source of basically all value im our simulation. Resources
-//! spawn on rocks on the world. And in some other spaces. They can be gathered
-//! by the agents. After a resource has been depleted it will respawn somewhere
-//! else on a new rock or other spot.
+//! spawn in the world when it is generated. After a resource has been depleted
+//! it will respawn at the same space after some time
+
 use crate::entity::agent::Agent;
 use crate::market::Market;
 use std::slice::Iter;
 
-// TODO IVO: here is where resources are defined
+// This is a resource as it is in the world.
 #[derive(Debug, Clone, Hash, PartialEq)]
 pub struct Resource {
     pub amount: u16,
@@ -23,17 +23,18 @@ impl Resource {
         }
     }
 
+    /// Gather one item from this resource.
     pub fn farm(&mut self) -> Option<ResourceItem> {
         if self.amount > 0 {
             self.amount = self.amount.saturating_sub(1);
-            return Some(self.resource);
+            Some(self.resource)
         } else {
-            return None;
+            None
         }
     }
 
     pub fn product(&self) -> ResourceItem {
-        return self.resource;
+        self.resource
     }
 
     pub fn produces_item(&self, item: ResourceItem) -> bool {
@@ -45,6 +46,7 @@ impl Resource {
     }
 }
 
+/// These are the four different kind of resources in the world
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ResourceItem {
     Wheat,
@@ -64,27 +66,6 @@ impl ResourceItem {
         RESOURCE_ITEMS.iter()
     }
 
-    // pub fn sort_by_benefit(items: &mut [ResourceItem; 4], agent: &Agent, market: &Market) {
-    //     // Sort (direct selection) the array by the benefit
-    //     // (given by the accumulated energy over the cost)
-    //     for i in 0..4 {
-    //         let mut max_ind: u8 = 0;
-    //         let mut max: f32 = 0.0;
-    //         for j in i..4 {
-    //             let (projected_price, _) = market.market_price(ResourceItem::from_index(j));
-    //             let projected_energy = (agent.nutrition[j]) as f32;
-    //             let benefit: f32 = projected_energy / projected_price as f32;
-    //             if benefit > max {
-    //                 max = benefit;
-    //                 max_ind = j;
-    //             }
-    //         }
-    //         let swap: ResourceItem = items[i as usize];
-    //         items[i as usize] = items[max_ind as usize];
-    //         items[max_ind as usize] = swap;
-    //     }
-    // }
-
     pub fn sorted(agent: &Agent, market: &Market) -> [ResourceItem; 4] {
         let mut resource_item: [ResourceItem; 4] = [
             ResourceItem::Wheat,
@@ -94,8 +75,8 @@ impl ResourceItem {
         ];
 
         resource_item.sort_by_key(|r| {
-            let (projected_price, _) = market.market_price(*r);
-            let projected_energy = agent.nutrition[*r] as u32 * 1000_000;
+            let projected_price = market.market_price(*r);
+            let projected_energy = agent.nutrition[*r] as u32 * 1_000_000;
 
             std::cmp::Reverse(projected_energy / (projected_price + 1))
         });
@@ -117,6 +98,8 @@ impl ResourceItem {
     }
 }
 
+/// Throughout our codebase we often need to store some information for every
+/// resource, this struct helps a lot with that.
 #[derive(Debug, Clone, Hash, Default, PartialEq, Eq)]
 pub struct PerResource<T> {
     pub wheat: T,
@@ -153,6 +136,7 @@ impl<T> PerResource<T> {
             .chain(once((ResourceItem::Meat, &mut self.meat)))
     }
 
+    /// Transform all values in this struct.
     pub fn map<U>(&self, mut f: impl FnMut(&T) -> U) -> PerResource<U> {
         PerResource {
             wheat: f(&self.wheat),
@@ -162,6 +146,7 @@ impl<T> PerResource<T> {
         }
     }
 
+    /// Like map but for two PerResources.
     pub fn combine<V, U>(
         &self,
         other: &PerResource<V>,
@@ -174,15 +159,6 @@ impl<T> PerResource<T> {
             meat: f(&self.meat, &other.meat),
         }
     }
-
-    // pub fn empty(&self) -> bool {
-    //     if self.wheat == T::default() &&
-    //     self.berry == T::default() &&
-    //     self.fish == T::default() &&
-    //     self.meat == T::default() {
-
-    //     }
-    // }
 }
 
 impl<T> std::ops::Index<ResourceItem> for PerResource<T> {

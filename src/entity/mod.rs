@@ -15,11 +15,14 @@ use self::{
     resources::{Resource, ResourceItem},
 };
 
+/// This is like a reference to an entity. it contains the index into the entity
+/// vector saved in the World struct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct EntityId(NonZeroU32);
 
 impl EntityId {
+    /// Create an entity id from an index.
     pub fn new(idx: usize) -> EntityId {
         EntityId(NonZeroU32::new((idx + 1) as u32).expect("Agent ID overflow"))
     }
@@ -37,21 +40,20 @@ impl EntityId {
     }
 }
 
+/// In our world everything that is not a tile is an entity. Every entity is on
+/// exactly one or zero tiles. ANd we have a two way mapping from tile to entity
+/// and from entity to tile. An entity can either be an agent, a resource, or a
+/// building.
 #[derive(Debug, Clone, Hash)]
 pub struct Entity {
+    /// Position of this entity, should always be on the world or (-1 -1)
     pub pos: Pos,
+    /// Type of this entity, this contains all further data.
     pub ty: EntityType,
 }
 
 impl Entity {
-    pub fn agent(&self) -> Option<Agent> {
-        if let EntityType::Agent(a) = self.ty.clone() {
-            Some(a)
-        } else {
-            None
-        }
-    }
-
+    /// The texture index of this entity.
     pub fn texture(&self) -> i32 {
         match &self.ty {
             EntityType::Agent(a) => {
@@ -66,9 +68,6 @@ impl Entity {
             EntityType::Building(Building::Market) => 56,
             EntityType::Building(Building::Hut { .. }) => 57,
             EntityType::Building(Building::Boat { .. }) => 49,
-            // TODO IVO: Add the texture indices here. This refers to a texture
-            // in assets/characters.png. The indices start at the top left going
-            // to the right.
             EntityType::Resource(Resource {
                 resource: ResourceItem::Wheat,
                 ..
@@ -85,10 +84,10 @@ impl Entity {
                 resource: ResourceItem::Fish,
                 ..
             }) => 50,
-            // _ => unimplemented!(),
         }
     }
 
+    /// True if this entity is currently visible.
     pub fn visible(&self) -> bool {
         match self.ty {
             EntityType::Agent(Agent {
@@ -101,6 +100,7 @@ impl Entity {
     }
 }
 
+/// The type of this entity. For more information see Entity.
 #[derive(Debug, Clone, Hash)]
 pub enum EntityType {
     Agent(Agent),
@@ -109,10 +109,11 @@ pub enum EntityType {
 }
 
 impl EntityType {
+    /// This function is called after the entity is generated. And is mainly
+    /// used to add agents to buildings.
     pub fn initialize(&mut self, pos: Pos, entities: &mut Vec<Entity>, config: &Config) {
-        match self {
-            EntityType::Building(b) => b.initialize(pos, entities, config),
-            _ => {}
+        if let EntityType::Building(b) = self {
+            b.initialize(pos, entities, config)
         }
     }
 }

@@ -17,7 +17,10 @@ use crate::{
     world::Pos,
 };
 
+/// A biome consists of a tile distribution. And a score function that
+/// determines when this biome will be selected.
 pub struct Biome {
+    /// Distribution of tiles for this biome.
     tiles: TileDistribution,
     /// To select what biome goes where we use two noise maps, one containing
     /// elevation, and one containing climate, from cold to warm. This function
@@ -65,6 +68,8 @@ impl Biome {
     }
 }
 
+/// This holds all the biomes and the noise function. This is the final step
+/// before actually constructing the world.
 pub struct BiomeMap {
     biomes: Vec<Biome>,
     elevation: Vec<ScalePoint<SuperSimplex>>,
@@ -114,6 +119,7 @@ impl BiomeMap {
     }
 }
 
+/// A probability distribution of tiles with optional entities on top.
 pub struct TileDistribution {
     tiles: Vec<(TileType, Option<EntityType>)>,
     weights: WeightedIndex<u16>,

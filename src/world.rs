@@ -10,7 +10,7 @@ use rand::{seq::IteratorRandom, thread_rng, Rng};
 
 use crate::{
     config::Config,
-    entity::{agent::Job, resources::PerResource, Entity, EntityId, EntityType},
+    entity::{agent::Job, Entity, EntityId, EntityType},
     entity::{
         agent::{Agent, AgentAction},
         building::Building,
@@ -233,12 +233,13 @@ impl World {
             match &mut entity.ty {
                 EntityType::Agent(a) => {
                     self.step_agent(a, &mut entity.pos, id);
+                    // record statistics for this agent
                     stats.step_agent(&a, id.as_index());
                 }
                 EntityType::Resource(r) => {
                     self.step_resource(r, &mut entity.pos, i);
                 }
-                EntityType::Building(b) => self.step_building(b, &mut entity.pos, i),
+                EntityType::Building(_) => (),
             }
             self.entities[i] = entity;
         }
@@ -384,16 +385,19 @@ impl World {
                 price,
                 amount,
             } => {
+                // Tke the resources and create an order on the market
                 let inventory = &mut a.inventory[item];
                 *inventory = inventory.checked_sub(amount).unwrap();
                 self.market.order(id, item, price, amount);
             }
             AgentAction::MarketPurchase { item, amount } => {
                 let (agents, resources_gained) = self.market.buy(item, amount, a.cash);
+                // Collect the new resources
                 a.collect(item, resources_gained);
 
+                // Transfer money to all agents we bought resources from
                 for (agent, price) in agents {
-                    a.cash = a.cash.checked_sub(price.into()).unwrap();
+                    a.cash = a.cash.checked_sub(price).unwrap();
 
                     if let Entity {
                         ty: EntityType::Agent(b),
@@ -406,6 +410,7 @@ impl World {
                     }
                 }
             }
+            // Do nothing this step
             AgentAction::None => {}
             AgentAction::Die => {
                 if a.in_building {
@@ -426,17 +431,18 @@ impl World {
         }
     }
 
+    // This is called for every resource every tick
     fn step_resource(&mut self, r: &mut Resource, pos: &mut Pos, idx: usize) {
         let current_tile_idx = self.idx(*pos);
-        // TODO IVO: This is called for every resource every tick
-        // To remove
-        // after 15 days
-        // to respawn
+
+        // Resources will be removed from the map once they are empty, they will
+        // then be respawned after timeout ticks.
         if r.available() == 0 {
             if r.timeout == 0 {
                 r.timeout = self.config.resource_timeout;
                 self.tiles_entity[current_tile_idx] = None;
             } else if r.timeout == 1 {
+                // Check that we are not respawning on an agent.
                 if self.tiles_entity[current_tile_idx].is_none() {
                     self.tiles_entity[current_tile_idx] = Some(EntityId::new(idx));
                     r.timeout = 0;
@@ -451,10 +457,8 @@ impl World {
         }
     }
 
-    fn step_building(&mut self, _b: &Building, pos: &mut Pos, _i: usize) {
-        let _current_tile_idx = self.idx(*pos);
-    }
-
+    /// This function is used by the interactive mode to update the vertex
+    /// buffers and redraw the sprites.
     pub fn update_grid(&mut self, display: &Display, grid: &mut CanvasGrid) {
         assert_eq!(grid.width * 32, self.width);
         assert_eq!(grid.height * 32, self.height);
@@ -488,31 +492,32 @@ impl World {
         )
     }
 
+    /// Get the tile type at a given position
     pub fn tile_type(&self, p: Pos) -> TileType {
         self.tiles_type[self.idx(p)]
     }
 
+    /// Get the entity at a given position
     pub fn entity_at(&self, pos: Pos) -> Option<&Entity> {
         let e = self.tiles_entity[self.idx(pos)]?;
         Some(&self.entities[e.as_index()])
     }
 
+    /// Check weather an agent can walk on the given tile.
     pub fn tile_is_walkable(&self, p: Pos) -> bool {
         self.tile_type(p).walkable() && self.entity_at(p).is_none()
     }
 
+    /// Check weather a boat can sail on the given tile. Boats can also move on
+    /// sand, to allow being parked on the beach.
     pub fn tile_is_sailable(&self, p: Pos) -> bool {
         let typ = self.tile_type(p);
         (typ == TileType::Water || typ == TileType::Sand) && self.entity_at(p).is_none()
     }
 
-    /// The days start at 0 and last 200 ticks.
+    /// The days start at 0 and generally last 200 ticks.
     pub fn time_of_day(&self) -> u32 {
         self.tick % self.config.day_length
-    }
-
-    pub fn market_prices(&self) -> PerResource<Option<u32>> {
-        self.market.prices()
     }
 }
 

@@ -1,3 +1,6 @@
+//! This module contains all the code for drawing the world with all the tiles
+//! and entities.
+
 use std::{
     cmp::{max, min},
     collections::hash_map::DefaultHasher,

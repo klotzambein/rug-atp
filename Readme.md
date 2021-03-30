@@ -7,8 +7,25 @@ This project needs a recent version of the stable rust compiler (tested on
 Imgui a c++ compiler might be required, If anything is missing it will most
 likely give an error during the compilation.
 
-To compile and run: `cargo run`.
+To compile: `cargo build --release`.
 
+## Running
+It is advised to compile and run the code in release mode, to accelerate the
+initialization and stepping. The code can be run in two modes, interactive mode
+and batch mode. In batch mode a path to a folder is given and all the contained
+configs will be loaded run simultaneously in the background. The statistics will
+be exported into the other given folder. To get more help run 
+`cargo run --release -- batch --help`.
+
+In interactive mode a simulation can be viewed as it progresses. Optionally a
+config can also be specified. To get more help run 
+`cargo run --release -- interactive --help`.
+
+Finally for more options run
+`cargo run --release -- --help`.
+
+For our simulation we ran
+`cargo run --release -- batch configs out`.
 
 ## World representation
 Each agent occupies exactly one tile. There is a bi-directional mapping from

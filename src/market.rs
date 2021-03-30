@@ -1,3 +1,5 @@
+//! This module defines the market and how agents can interact with it.
+
 use std::rc::Rc;
 
 use crate::{
@@ -8,16 +10,23 @@ use crate::{
     },
 };
 
+/// The global market where agents can trade, this is not the building, seen on
+/// the map, it is the backend used by the buildings.
 #[derive(Debug, Clone, Default)]
 pub struct Market {
+    /// A moving average of the sold orders.
     pub market_price: PerResource<f32>,
+    /// This counts every day how much of each resource has been sold.
     pub market_demand: PerResource<u32>,
-    // TODO Ivo - make sure the orders are sorted
+    /// This contains all the open orders for every resource. Sorted from
+    /// cheapest to most expensive.
     orders: PerResource<Vec<Order>>,
+    /// Reference to the config.
     config: Rc<Config>,
 }
 
 impl Market {
+    /// Should be called every step, this will reset the demand and expire/update the orders
     pub fn step(&mut self, tick: u32, mut _expire: impl FnMut(&Order, ResourceItem)) {
         if tick % self.config.day_length == 0 {
             self.market_demand = Default::default();
@@ -41,6 +50,7 @@ impl Market {
         self.cache_prices();
     }
 
+    /// Recalculate order prices and cache them.
     pub fn cache_prices(&mut self) {
         let config = self.config.clone();
         for (r, orders) in self.orders.iter_mut() {
@@ -52,12 +62,15 @@ impl Market {
         }
     }
 
-    pub fn prices(&self) -> PerResource<Option<u32>> {
+    /// This function returns the currently cheapest possible order per resource.
+    pub fn cheapest_prices(&self) -> PerResource<Option<u32>> {
         self.orders.map(|os| Some(os.first()?.cached_price))
     }
 
+    /// Create an order on the market.
     pub fn order(&mut self, agent: EntityId, item: ResourceItem, price: u32, amount: u32) {
         let orders = &mut self.orders[item];
+        // Insert it into the sorted array.
         let pos = orders
             .binary_search_by_key(&price, |o| o.cached_price)
             .unwrap_or_else(|e| e);
@@ -74,23 +87,12 @@ impl Market {
         );
     }
 
+    /// Computes the volume/total amount per resource.
     pub fn volume(&self) -> PerResource<u32> {
         self.orders.map(|o| o.iter().map(|a| a.amount).sum())
     }
 
-    // pub fn purchase(&mut self, item: ResourceItem) -> (EntityId, u32) {
-    //     let o = self.orders[item].last_mut().unwrap();
-    //     let price = o.cached_price;
-    //     let agent = o.agent;
-    //     o.amount -= 1;
-    //     if o.amount == 0 {
-    //         self.orders[item].pop();
-    //     }
-
-    //     (agent, price)
-    // }
-
-    /// Private internal method that executes the purchase of the specific resource    
+    /// Private internal method that executes the purchase of the specific resource. See also Market::buy
     fn buy_resource(
         &mut self,
         resource: ResourceItem,
@@ -113,13 +115,13 @@ impl Market {
 
             // If the agent wants to partially fulfill the order, it still stays
             // but its amount is decremented
-            if order.amount > am_left.into() {
+            if order.amount > am_left {
                 if am_left * order.cached_price + acc_price > cash_available {
                     break;
                 }
 
                 // Fulfill the order
-                let (m_p, demand) = order.fulfill(am_left.into());
+                let (m_p, demand) = order.fulfill(am_left);
                 sellers.push((order.agent, am_left * order.cached_price));
 
                 // Update the demand and market price of the resource
@@ -135,7 +137,7 @@ impl Market {
                     break;
                 }
 
-                am_left = am_left.saturating_sub(order.amount.into());
+                am_left = am_left.saturating_sub(order.amount);
                 acc_price = acc_price.saturating_add(order.cached_price * order.amount);
 
                 let (m_p, demand) = order.fulfill(order.amount);
@@ -151,9 +153,11 @@ impl Market {
 
         // If the order is fully fulfilled only the accumulated price is returned
         // Otherwise, the fulfilled amount is returned as well
-        return (sellers, amount - am_left);
+        (sellers, amount - am_left)
     }
 
+    /// Buy all the available resources, this returns the amount of money owed
+    /// to which agent and the total resources gained.
     pub fn buy(
         &mut self,
         resource: ResourceItem,
@@ -169,13 +173,12 @@ impl Market {
         result
     }
 
-    pub fn market_price(&self, resource_item: ResourceItem) -> (u32, u32) {
-        (
-            self.market_price[resource_item] as u32,
-            self.market_demand[resource_item],
-        )
+    /// Returns the current price estimation
+    pub fn market_price(&self, resource_item: ResourceItem) -> u32 {
+        self.market_price[resource_item] as u32
     }
 
+    /// This function gives an estimate of what it would cost to buy a set of resources.
     pub fn total_price(&self, meals: &PerResource<u32>) -> u32 {
         let mut sum: u32 = 0;
         for r_item in ResourceItem::iterator() {
@@ -185,31 +188,37 @@ impl Market {
         sum
     }
 
-    fn total_amount(&self, orders: &Vec<Order>) -> u32 {
-        let mut sum: u32 = 0;
-        for order in orders.iter() {
-            sum += order.amount;
-        }
-
-        sum
-    }
-
+    /// Same as volume but only for one resource
     pub fn availability(&self, resource_item: ResourceItem) -> u32 {
-        self.total_amount(&self.orders[resource_item])
+        self.orders[resource_item]
+            .iter()
+            .map(|o| o.cached_price)
+            .sum()
     }
 }
 
+/// This is one order, this is a number of resources one agent wants to sell for
+/// a given price. Orders get re-evaluate after a set amount of time, and they
+/// also expire after a some time. This simulates the spoiling of the food, and
+/// helps with market saturation.
 #[derive(Debug, Clone)]
 pub struct Order {
+    /// The current calculated price (per amount)
     pub cached_price: u32,
+    /// The initial price chosen by the agent (per amount)
     pub value: u32,
+    /// Current amount within this order, will change if the order gets filled partially
     pub amount: u32,
+    /// The agent which placed the order.
     pub agent: EntityId,
+    /// Ticks until re evaluation.
     pub re_eval: u32,
+    /// Ticks until this order expires.
     pub expiration: u32,
 }
 
 impl Order {
+    /// Call once per tick, returns true if the order expires.
     pub fn expire(&mut self) -> bool {
         if self.expiration == 0 {
             true
@@ -219,6 +228,7 @@ impl Order {
         }
     }
 
+    /// Recalculate the price if necessary, call once per tick.
     pub fn cache_price(&mut self, market_price: u32, config: &Config) {
         // If the order has expired, its price needs to update to be better
         // suited to the market and its re_eval is set back to the default
@@ -247,6 +257,7 @@ impl Order {
         }
     }
 
+    /// Fulfill this order, returns the price per unit and amount.
     pub fn fulfill(&mut self, _amount: u32) -> (u32, u32) {
         if _amount >= self.amount {
             self.amount = 0;

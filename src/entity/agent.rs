@@ -18,6 +18,10 @@ use super::{
     Entity, EntityId, EntityType,
 };
 
+/// An agent is the main interesting point in our simulation, they interact with
+/// their environment and try to survive as long as possible. The behavior of
+/// these agents is split across this file and world.rs, to fully understand
+/// them the files should be read together.
 #[derive(Debug, Clone, Hash)]
 pub struct Agent {
     /// This contains the agents job, and all variables associated with said
@@ -63,12 +67,39 @@ pub struct Agent {
 }
 
 impl Agent {
-    // TODO: change jobs after a while if they don't reach their targets
+    /// Create a new agent based on the config.
+    pub fn new(config: &Config) -> Self {
+        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * config.greed_sd
+            + config.greed_mean)
+            .max(0.) as u32;
+        Agent {
+            job: random(),
+            state: AgentState::DoJob,
+            home: Pos::default(),
+            nutrition: PerResource::new(config.initial_nutrition),
+            inventory: PerResource::new(config.initial_inventory),
+            energy: config.initial_energy,
+            energy_quota: config.initial_energy,
+            // TODO draw this from a normal distribution
+            greed,
+            meal_plan: None,
+            shopping_list: None,
+            cash: config.initial_cash,
+            cash_quota: config.initial_cash,
+            in_building: false,
+            dead: false,
+            timeout_quota: config.timeout_quota,
+        }
+    }
+
+    /// This function is called once per agent per step, it returns an agent
+    /// action which will then be executed by the World struct.
     pub fn step(&mut self, pos: Pos, world: &World) -> AgentAction {
         if self.dead {
             return AgentAction::None;
         }
 
+        // Change energy
         self.energy = self.energy.saturating_sub(world.config.energy_cost);
         if self.energy == 0 {
             return AgentAction::Die;
@@ -76,6 +107,7 @@ impl Agent {
 
         self.timeout_quota = self.timeout_quota.saturating_sub(1);
 
+        // Select an action based on the current state.
         match self.state {
             AgentState::GoHome => match self.path_find(pos, Some(self.home), world) {
                 Ok(h) => {
@@ -84,23 +116,24 @@ impl Agent {
                     AgentAction::Enter(h)
                 }
                 Err(a) => {
-                    if world.tile_type(pos) == TileType::Sand
-                        && matches!(self.job, Job::Fisher { boat: Some(_) })
+                    // This special case makes fishers leave their boat on the beach
+                    if matches!(self.job, Job::Fisher { boat: Some(_) })
+                        && world.tile_type(pos) == TileType::Sand
                     {
-                        if let Some(p) =
+                        return if let Some(p) =
                             world.find_tile_around(pos, 9, |p| world.tile_is_walkable(p))
                         {
                             AgentAction::LeaveBoat(p)
                         } else {
                             AgentAction::None
-                        }
-                    } else {
-                        a
+                        };
                     }
+                    a
                 }
             },
             AgentState::BeHome => {
                 if self.energy < world.config.initial_energy {
+                    // Eat according to mealplan
                     if let Some(_meal_plan) = &self.meal_plan {
                         for r in ResourceItem::iterator() {
                             if _meal_plan[*r] > 0 && self.inventory[*r] > 0 {
@@ -110,17 +143,9 @@ impl Agent {
                         }
                         self.meal_plan = None;
                     }
-
-                    // let mut items = self.nutrition.iter().collect::<Vec<_>>();
-                    // items.sort_by_key(|i| std::cmp::Reverse(i.1));
-                    // for (r, n) in items {
-                    //     if *n > 0 && self.inventory[r] > 0 {
-                    //         return AgentAction::Consume(r, self.inventory[r].min(1));
-                    //     }
-                    // }
                 }
                 if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world)) {
-                    // TODO: Make an informed choice
+                    // Decide what to do next.
                     if random() {
                         self.state = AgentState::DoJob;
                     } else {
@@ -162,7 +187,6 @@ impl Agent {
                 }
                 // Leave the market
                 if let Some(p) = world.find_tile_around(pos, 9, |p| self.can_walk_on(p, world)) {
-                    // TODO: Maybe go straight to work
                     self.state = AgentState::GoHome;
                     AgentAction::Leave(p)
                 } else {
@@ -172,12 +196,14 @@ impl Agent {
         }
     }
 
+    /// Select the appropriate agent action to do the job the agent selected.
     pub fn do_job(&mut self, pos: Pos, world: &World) -> AgentAction {
         match &mut self.job {
             Job::Lumberer => self.find_and_farm(world, pos, ResourceItem::Berry),
             Job::Farmer => self.find_and_farm(world, pos, ResourceItem::Wheat),
             Job::Butcher => self.find_and_farm(world, pos, ResourceItem::Meat),
             Job::Fisher { boat } => {
+                // Do this if the agent is in a boat.
                 if boat.is_some() {
                     // if on sand: go water
                     if let TileType::Sand = world.tile_type(pos) {
@@ -186,8 +212,7 @@ impl Agent {
                             world.config.search_radius * world.config.search_radius,
                             |p| world.tile_type(p) == TileType::Water,
                         );
-                        return self
-                            .path_find(pos, target, world)
+                        self.path_find(pos, target, world)
                             .map(|p| {
                                 if self.can_walk_on(p, world) {
                                     AgentAction::Move(p)
@@ -195,31 +220,34 @@ impl Agent {
                                     AgentAction::None
                                 }
                             })
-                            .unwrap_or_else(|a| a);
+                            .unwrap_or_else(|a| a)
                     } else {
                         // if on water
-                        return self.find_and_farm(world, pos, ResourceItem::Fish);
+                        self.find_and_farm(world, pos, ResourceItem::Fish)
                     }
                 }
+                // Look for a boat on a beach
+                else {
+                    // First find a boat and enter it
+                    let target_pos = world.find_entity_around(
+                        pos,
+                        world.config.search_radius * world.config.search_radius,
+                        |e| matches!(e.ty, EntityType::Building(Building::Boat { .. })),
+                    );
 
-                // First find a boat and enter it
-                let target_pos = world.find_entity_around(
-                    pos,
-                    world.config.search_radius * world.config.search_radius,
-                    |e| matches!(e.ty, EntityType::Building(Building::Boat { .. })),
-                );
+                    let pf = self.path_find(pos, target_pos, world);
 
-                let pf = self.path_find(pos, target_pos, world);
-
-                match pf {
-                    Ok(p) => AgentAction::EnterBoat(p),
-                    Err(a) => a,
+                    match pf {
+                        Ok(p) => AgentAction::EnterBoat(p),
+                        Err(a) => a,
+                    }
                 }
             }
             Job::Explorer {
                 observations,
                 count,
             } => {
+                // look at all resources in the search radius and keep a score of the ones we have seen.
                 world.find_entity_around(
                     pos,
                     world.config.search_radius * world.config.search_radius,
@@ -240,6 +268,8 @@ impl Agent {
                 );
 
                 *count += 1;
+
+                // Select the highest scoring job.
                 if *count == world.config.exploration_timeout {
                     let mut max_freq: u32 = 0;
                     let mut best_item: ResourceItem = ResourceItem::Berry;
@@ -258,8 +288,8 @@ impl Agent {
                     }
                 }
 
+                // Walk in a random direction
                 let dir: Direction = rand::random();
-
                 let target = (pos + dir).wrap(world);
 
                 if self.can_walk_on(target, world) {
@@ -271,8 +301,8 @@ impl Agent {
         }
     }
 
+    /// make the mealing plan and return it if possible.
     pub fn make_mealing_plan(&self, market: &Market) -> Option<PerResource<u32>> {
-        // return Some(PerResource::new(10));
         let mut to_ret: PerResource<u32> = PerResource::default();
 
         if self.energy >= self.energy_quota {
@@ -308,12 +338,12 @@ impl Agent {
             to_ret[*r_item] = availability;
             needed_energy = needed_energy.saturating_sub(needed_amount * unit_energy);
         }
-        return Some(to_ret);
+        Some(to_ret)
     }
 
-    // Every time an agent gets home (finishes the working day), they set an energy quota
-    // for the next day
-    pub fn update_quotas(&mut self, config: &Config) -> () {
+    /// Every time an agent gets home (finishes the working day), they set an energy quota
+    /// for the next day
+    pub fn update_quotas(&mut self, config: &Config) {
         // If the agent's energy is above the baseline, their goal for the next day is simply not to
         // lose any more energy
         if self.energy >= config.initial_energy {
@@ -346,16 +376,19 @@ impl Agent {
         self.cash_quota = self.cash + ((self.cash as f32) * desired_profit) as u32;
     }
 
+    /// Subtract the inventory from the mealing plan.
     fn make_shopping_list(&self, meal_plan: &Option<PerResource<u32>>) -> Option<PerResource<u32>> {
-        // It subtracts the stuff they need from the stuff they have, so they don't buy excessively
-        // If you need a product, you check how much of it you have and you put the rest on your shopping list
+        // It subtracts the stuff they need from the stuff they have, so they
+        // don't buy excessively If you need a product, you check how much of it
+        // you have and you put the rest on your shopping list
         let mut to_ret: PerResource<u32> = PerResource::default();
 
         if let Some(_meal_plan) = meal_plan {
             // Boolean flag about whether there is a single item on the shopping list
             let mut empty: bool = true;
             for r_item in ResourceItem::iterator() {
-                // The item is only added to the shopping list if the agent currently has less than it needs
+                // The item is only added to the shopping list if the agent
+                // currently has less than it needs
                 if _meal_plan[*r_item] > self.inventory[*r_item] {
                     to_ret[*r_item] = _meal_plan[*r_item].saturating_sub(self.inventory[*r_item]);
                     empty = false;
@@ -365,28 +398,29 @@ impl Agent {
             if empty {
                 return None;
             }
-            return Some(to_ret);
+            Some(to_ret)
         } else {
-            return None;
+            None
         }
     }
 
-    //fn modify_shopping_item(&mut self, r_item: ResourceItem, amount: u32) {}
-
+    /// Select the appropriate action for trading on the market, this is only
+    /// valid if the agent is in a market.
     pub fn trade_on_market(&mut self, _pos: Pos, world: &World) -> Option<AgentAction> {
-        // If a shopping list is not constructed and the energy is below the quota, it constructs it
-        // TODO update for multiple markets
+        // If a shopping list is not constructed and the energy is below the
+        // quota, it constructs it
         let market: &Market = &world.market;
 
-        if let None = self.meal_plan {
+        if self.meal_plan.is_none() {
             self.meal_plan = self.make_mealing_plan(market);
         }
 
-        if let None = self.shopping_list {
+        if self.shopping_list.is_none() {
             self.shopping_list = self.make_shopping_list(&self.meal_plan);
         }
 
-        // After a shopping list has been constructed, it sells everything they don't need
+        // After a shopping list has been constructed, it sells everything they
+        // don't need
 
         for r_item in ResourceItem::iterator() {
             let excess: u32 = match &self.meal_plan {
@@ -425,7 +459,7 @@ impl Agent {
                 // Finally it puts the order on the action list
                 return Some(AgentAction::MarketOrder {
                     item: *r_item,
-                    price: price,
+                    price,
                     amount: excess,
                 });
             }
@@ -453,15 +487,6 @@ impl Agent {
         }
 
         // Remove the purchased item from the shopping list before returning
-        // TODO Robin: once again, mutability issues that I can't figure out
-        // I made shopping list and meal_plan fields in Agent but I realized them as Options
-        // because it is more generalizable and elegant. But now I can't change the value of one of the
-        // resources in the PerResource because I need to unpack it and the some mutability shit
-
-        // If you want to try and fix this, what I want this code to do is set the amount of purchased_item
-        // in self.shopping_plan to 0
-        // let mut shopping_list_copy = self.shopping_list.clone();
-
         if let Some(list) = &mut self.shopping_list {
             if let Some(r_item) = purchased_item {
                 list[r_item] = 0;
@@ -478,6 +503,9 @@ impl Agent {
         }
     }
 
+    /// Find an entity in the world, caching its position. This will return
+    /// Err(action) with an appropriate action to reach the target, or
+    /// Ok(target), when it is reached
     pub fn find(
         &mut self,
         world: &World,
@@ -496,7 +524,8 @@ impl Agent {
         self.path_find(pos, *target, world)
     }
 
-    /// This function will return actions that lead to the agents locating a resource and farming it.
+    /// This function will return actions that lead to the agents locating a
+    /// resource and farming it.
     pub fn find_and_farm(&mut self, world: &World, pos: Pos, item: ResourceItem) -> AgentAction {
         let target_pos = world.find_entity_around(
             pos,
@@ -560,6 +589,8 @@ impl Agent {
         }
     }
 
+    /// Returns true if the agent can walk on the given tile based on its
+    /// current state.
     pub fn can_walk_on(&mut self, pos: Pos, world: &World) -> bool {
         if let Job::Fisher { boat: Some(_) } = self.job {
             world.tile_is_sailable(pos)
@@ -573,6 +604,8 @@ impl Agent {
         self.inventory[resource] += amount;
     }
 
+    /// REmoves the given resource from th inventory and consumes it. This will
+    /// change the nutritional values and the energy.
     pub fn consume(&mut self, resource: ResourceItem, quantity: u32, config: &Config) {
         assert!(self.inventory[resource] > 0);
         self.inventory[resource] = self.inventory[resource].saturating_sub(quantity);
@@ -587,30 +620,6 @@ impl Agent {
             } else {
                 *n = n.saturating_add(config.nutrition_add.saturating_mul(quantity.min(255) as u8));
             }
-        }
-    }
-
-    pub fn new(config: &Config) -> Self {
-        let greed = (thread_rng().sample::<f32, _>(rand_distr::StandardNormal) * config.greed_sd
-            + config.greed_mean)
-            .max(0.) as u32;
-        Agent {
-            job: random(),
-            state: AgentState::DoJob,
-            home: Pos::default(),
-            nutrition: PerResource::new(config.initial_nutrition),
-            inventory: PerResource::new(config.initial_inventory),
-            energy: config.initial_energy,
-            energy_quota: config.initial_energy,
-            // TODO draw this from a normal distribution
-            greed,
-            meal_plan: None,
-            shopping_list: None,
-            cash: config.initial_cash,
-            cash_quota: config.initial_cash,
-            in_building: false,
-            dead: false,
-            timeout_quota: config.timeout_quota,
         }
     }
 }
@@ -637,7 +646,11 @@ pub enum AgentAction {
     Enter(Pos),
     /// Leave a building and go to pos
     Leave(Pos),
+    /// Enter a boat at pos, this will change the agent texture and temporarily remove
+    /// the boat.
     EnterBoat(Pos),
+    /// Leave the boat at the current position and go to Pos, this will change
+    /// the agent texture back to normal and add the boat back to the world.
     LeaveBoat(Pos),
     /// Consume a resource.
     Consume(ResourceItem, u32),
@@ -659,9 +672,9 @@ pub enum AgentAction {
     Die,
 }
 
+/// Current job of the agent.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Job {
-    // None,
     Explorer {
         count: u16,
         observations: PerResource<u32>,
@@ -672,16 +685,12 @@ pub enum Job {
         boat: Option<EntityId>,
     },
     Butcher,
-    // Miner,
-    // CompanyMember(CompanyId),
-    // Builder,
 }
 
 impl Job {
+    /// Texture of the agent based on th job.
     pub fn texture(&self) -> i32 {
         match self {
-            // Job::CompanyMember(c) => *c as i32 + 8,
-            // Job::Miner => 2,
             Job::Farmer => 10,
             Job::Explorer { .. } => 11,
             Job::Fisher { boat: None } => 12,
@@ -689,12 +698,6 @@ impl Job {
             Job::Butcher => 13,
             Job::Lumberer => 15,
         }
-    }
-}
-
-impl Default for Job {
-    fn default() -> Self {
-        Job::Lumberer
     }
 }
 
@@ -714,6 +717,7 @@ impl Distribution<Job> for Standard {
     }
 }
 
+/// This represents a direction an agent can walk in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
     Up,
@@ -727,6 +731,7 @@ pub enum Direction {
 }
 
 impl Direction {
+    /// This returns the direction the agent has to walk to reach end from start.
     pub fn delta(end: Pos, start: Pos, world: &World) -> Direction {
         let mut dx = start.x.cmp(&end.x);
         let mut dy = start.y.cmp(&end.y);

@@ -125,7 +125,7 @@ impl UI {
             .build(ui, || {
                 let prices = world
                     .market
-                    .prices()
+                    .cheapest_prices()
                     .map(|p| p.map(|p| p as f32).unwrap_or(f32::NAN));
                 ui.text(&format!("Prices: {:#?}", prices));
                 ui.text(&format!("M-Prices: {:#?}", world.market.market_price));
